@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "ADO_Tools_WinUI (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "ADO_Tools_WinUI (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
