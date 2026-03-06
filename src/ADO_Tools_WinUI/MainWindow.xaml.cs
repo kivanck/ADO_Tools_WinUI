@@ -18,7 +18,7 @@ namespace ADO_Tools_WinUI
             SetTitleBar(AppTitleBar);
 
             // Resize using DPI-aware logical size so it looks correct at any scaling
-            ResizeWindowToLogicalSize(1280, 840);
+            ResizeWindowToLogicalSize(1280, 970);
 
             Closed += MainWindow_Closed;
         }

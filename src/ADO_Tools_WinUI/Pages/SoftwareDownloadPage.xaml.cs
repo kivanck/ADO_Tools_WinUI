@@ -12,7 +12,7 @@ namespace ADO_Tools_WinUI.Pages
 {
     public sealed partial class SoftwareDownloadPage : Page
     {
-        private readonly Dictionary<string, string> _buildIdMap = new();
+        private List<BuildInfoViewModel> _allBuildViewModels = new();
         private List<TFSFunctions.BuildInfo> _builds = new();
 
         public SoftwareDownloadPage()
@@ -284,19 +284,13 @@ namespace ADO_Tools_WinUI.Pages
 
             _builds = await tfs.GetAvailableBuildsAsync(org, project, definitionId, pat, top);
 
-            cmbBuilds.Items.Clear();
-            _buildIdMap.Clear();
+            _allBuildViewModels = _builds.Select(BuildInfoViewModel.FromBuildInfo).ToList();
+            lvBuilds.ItemsSource = _allBuildViewModels;
+            buildFilterBox.Text = string.Empty;
 
-            foreach (var build in _builds)
+            if (_allBuildViewModels.Count > 0)
             {
-                string display = $"{build.ProductName,-25}|{build.DisplayVersion,-13}|{build.Result,12}|{build.FinishTime,20}";
-                cmbBuilds.Items.Add(new ComboBoxItem { Content = display });
-                _buildIdMap[display] = build.BuildId;
-            }
-
-            if (cmbBuilds.Items.Count > 0)
-            {
-                cmbBuilds.SelectedIndex = 0;
+                lvBuilds.SelectedIndex = 0;
                 AppendLog("Builds loaded successfully.");
             }
             else
@@ -312,20 +306,13 @@ namespace ADO_Tools_WinUI.Pages
 
         private async void BtnUpdate_Click(object sender, RoutedEventArgs e)
         {
-            if (cmbBuilds.SelectedItem is not ComboBoxItem selectedItem || string.IsNullOrWhiteSpace(txtDownloadFolder.Text))
+            if (lvBuilds.SelectedItem is not BuildInfoViewModel selectedVm || string.IsNullOrWhiteSpace(txtDownloadFolder.Text))
             {
                 ShowMessage("Please select a build and download folder.");
                 return;
             }
 
-            var selectedDisplay = (string)selectedItem.Content;
-            if (!_buildIdMap.TryGetValue(selectedDisplay, out var buildId))
-            {
-                ShowMessage("Could not resolve the selected build.");
-                return;
-            }
-
-            var selectedBuildInfo = _builds.FirstOrDefault(b => b.BuildId == buildId);
+            var selectedBuildInfo = _builds.FirstOrDefault(b => b.BuildId == selectedVm.BuildId);
             if (selectedBuildInfo == null)
             {
                 ShowMessage("Build info not found.");
@@ -356,7 +343,7 @@ namespace ADO_Tools_WinUI.Pages
             var settings = AppSettings.Default;
 
             await tfsFunctions.DownloadLatestBuildArtifacts(
-                settings.Organization, project, buildId,
+                settings.Organization, project, selectedBuildInfo.BuildId,
                 downloadFolder, extractFolder,
                 settings.PersonalAccessToken, installFunctions);
 
@@ -480,6 +467,23 @@ namespace ADO_Tools_WinUI.Pages
                 XamlRoot = this.XamlRoot
             };
             await dialog.ShowAsync();
+        }
+
+        private void BuildFilterBox_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
+        {
+            var filter = sender.Text?.Trim();
+            if (string.IsNullOrEmpty(filter))
+            {
+                lvBuilds.ItemsSource = _allBuildViewModels;
+                return;
+            }
+
+            lvBuilds.ItemsSource = _allBuildViewModels
+                .Where(b => b.ProductName.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                         || b.DisplayVersion.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                         || b.Result.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                         || b.FinishTime.Contains(filter, StringComparison.OrdinalIgnoreCase))
+                .ToList();
         }
 
         private void BtnClearLog_Click(object sender, RoutedEventArgs e)

@@ -1,10 +1,11 @@
 <Page
-    x:Class="ADO_Tools_WinUI.Pages.SoftwareDownloadPage"
-    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    mc:Ignorable="d">
+x:Class="ADO_Tools_WinUI.Pages.SoftwareDownloadPage"
+xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+xmlns:local="using:ADO_Tools_WinUI.Pages"
+mc:Ignorable="d">
 
     <Grid Padding="24,20,24,20" ColumnSpacing="20">
         <Grid.ColumnDefinitions>
@@ -12,7 +13,7 @@
             <ColumnDefinition Width="*" MinWidth="340" />
         </Grid.ColumnDefinitions>
 
-        <!-- ??????? LEFT COLUMN: Configuration ??????? -->
+        <!-- ─────── LEFT COLUMN: Configuration ─────── -->
         <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
             <Grid Padding="0,0,4,0" RowSpacing="1">
                 <Grid.RowDefinitions>
@@ -72,14 +73,32 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <TextBox x:Name="txtDefinitionId"
-                                     Grid.Column="0"
-                                     Header="Definition ID"
-                                     PlaceholderText="e.g. 6098" />
-                            <TextBox x:Name="txtProject"
-                                     Grid.Column="1"
-                                     Header="Project"
-                                     PlaceholderText="e.g. civil" />
+                            <Grid Grid.Column="0" ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="Def. ID"
+                                           VerticalAlignment="Center"
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <TextBox x:Name="txtDefinitionId"
+                                         Grid.Column="1"
+                                         PlaceholderText="e.g. 6098" />
+                            </Grid>
+                            <Grid Grid.Column="1" ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="Project"
+                                           VerticalAlignment="Center"
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <TextBox x:Name="txtProject"
+                                         Grid.Column="1"
+                                         PlaceholderText="e.g. civil" />
+                            </Grid>
                         </Grid>
                     </StackPanel>
                 </Border>
@@ -129,25 +148,67 @@
                             </Button>
                         </Grid>
 
-                        <ComboBox x:Name="cmbBuilds"
-                                  Header="Available Builds"
-                                  HorizontalAlignment="Stretch"
-                                  PlaceholderText="Load builds first�"
-                                  FontFamily="Cascadia Code, Consolas"
-                                  FontSize="11" />
+                        <AutoSuggestBox x:Name="buildFilterBox"
+                                        PlaceholderText="Filter builds…"
+                                        QueryIcon="Find"
+                                        TextChanged="BuildFilterBox_TextChanged" />
+
+                        <!-- Column Headers -->
+                        <Grid Padding="12,8" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+                              CornerRadius="4,4,0,0"
+                              BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                              BorderThickness="1,1,1,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="1.2*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="1.5*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Product" FontWeight="SemiBold" FontSize="12" />
+                            <TextBlock Grid.Column="1" Text="Version" FontWeight="SemiBold" FontSize="12" />
+                            <TextBlock Grid.Column="2" Text="Result" FontWeight="SemiBold" FontSize="12" />
+                            <TextBlock Grid.Column="3" Text="Finish Time" FontWeight="SemiBold" FontSize="12" />
+                        </Grid>
+
+                        <ListView x:Name="lvBuilds"
+                                  MaxHeight="260"
+                                  SelectionMode="Single"
+                                  BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                  BorderThickness="1"
+                                  CornerRadius="0,0,4,4">
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="local:BuildInfoViewModel">
+                                    <Grid Padding="4,6" ColumnSpacing="4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="2*" />
+                                            <ColumnDefinition Width="1.2*" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="1.5*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="{x:Bind ProductName}"
+                                                   FontFamily="Cascadia Code, Consolas" FontSize="11"
+                                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="1" Text="{x:Bind DisplayVersion}"
+                                                   FontFamily="Cascadia Code, Consolas" FontSize="11"
+                                                   Foreground="{x:Bind VersionBrush}"
+                                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="2" Text="{x:Bind Result}"
+                                                   FontFamily="Cascadia Code, Consolas" FontSize="11"
+                                                   Foreground="{x:Bind ResultBrush}"
+                                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="3" Text="{x:Bind FinishTime}"
+                                                   FontFamily="Cascadia Code, Consolas" FontSize="11"
+                                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
                     </StackPanel>
                 </Border>
 
-                <!-- Download Folder + Options (side by side) -->
-                <Grid Grid.Row="2" ColumnSpacing="1">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-
-                    <!-- Download Folder -->
-                    <Border Grid.Column="0"
-                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                <!-- Download Folder -->
+                <StackPanel Grid.Row="2" Spacing="1">
+                    <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                             BorderThickness="1" CornerRadius="8" Padding="20">
                         <StackPanel Spacing="14">
@@ -168,7 +229,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBox x:Name="txtDownloadFolder"
                                          Grid.Column="0"
-                                         PlaceholderText="Select a folder�" />
+                                         PlaceholderText="Select a folder…" />
                                 <Button x:Name="btnBrowseDownloadFolder"
                                         Grid.Column="1"
                                         VerticalAlignment="Bottom" Height="32"
@@ -181,8 +242,7 @@
                     </Border>
 
                     <!-- Options -->
-                    <Border Grid.Column="1"
-                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                             BorderThickness="1" CornerRadius="8" Padding="20">
                         <StackPanel Spacing="14">
@@ -196,15 +256,31 @@
                                            Style="{StaticResource BodyStrongTextBlockStyle}"
                                            VerticalAlignment="Center" />
                             </StackPanel>
-                            <ToggleSwitch x:Name="toggleDownloadOnly"
-                                          Header="Download Only"
-                                          OffContent="Off" OnContent="On" />
-                            <ToggleSwitch x:Name="toggleCleanUninstall"
-                                          Header="Clean Uninstall"
-                                          OffContent="Off" OnContent="On" />
+                            <StackPanel Orientation="Horizontal" Spacing="16">
+                                <StackPanel Orientation="Horizontal" Spacing="8"
+                                            VerticalAlignment="Center">
+                                    <TextBlock Text="Download Only"
+                                               VerticalAlignment="Center"
+                                               Style="{StaticResource CaptionTextBlockStyle}"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <ToggleSwitch x:Name="toggleDownloadOnly"
+                                                  OffContent="Off" OnContent="On"
+                                                  MinWidth="0" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Spacing="8"
+                                            VerticalAlignment="Center">
+                                    <TextBlock Text="Clean Uninstall"
+                                               VerticalAlignment="Center"
+                                               Style="{StaticResource CaptionTextBlockStyle}"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <ToggleSwitch x:Name="toggleCleanUninstall"
+                                                  OffContent="Off" OnContent="On"
+                                                  MinWidth="0" />
+                                </StackPanel>
+                            </StackPanel>
                         </StackPanel>
                     </Border>
-                </Grid>
+                </StackPanel>
 
                 <!-- Spacer -->
                 <Border Grid.Row="3" />
@@ -229,7 +305,7 @@
             </Grid>
         </ScrollViewer>
 
-        <!-- ??????? RIGHT COLUMN: Log Output ??????? -->
+        <!-- ─────── RIGHT COLUMN: Log Output ─────── -->
         <Border Grid.Column="1"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
