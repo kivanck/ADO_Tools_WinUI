@@ -19,18 +19,12 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Top command bar with Settings button -->
-        <Grid Padding="16,8" Background="{ThemeResource LayerFillColorDefaultBrush}">
+        <!-- Compact title bar drag region -->
+        <Grid x:Name="AppTitleBar" Grid.Row="0" Height="32"
+              Padding="12,0">
             <TextBlock Text="ADO Tools"
-                       Style="{StaticResource TitleTextBlockStyle}"
+                       Style="{StaticResource CaptionTextBlockStyle}"
                        VerticalAlignment="Center" />
-            <Button x:Name="btnSettings"
-                    HorizontalAlignment="Right"
-                    VerticalAlignment="Center"
-                    ToolTipService.ToolTip="Settings"
-                    Click="BtnSettings_Click">
-                <SymbolIcon Symbol="Setting" />
-            </Button>
         </Grid>
 
         <!-- Tab layout keeps both pages alive simultaneously -->
@@ -40,6 +34,19 @@
                  CanDragTabs="False"
                  CanReorderTabs="False"
                  TabWidthMode="SizeToContent">
+
+            <TabView.TabStripFooter>
+                <Grid HorizontalAlignment="Stretch">
+                    <Button x:Name="btnSettings"
+                            HorizontalAlignment="Right"
+                            Margin="0,0, 24,0"
+                            VerticalAlignment="Center"
+                            ToolTipService.ToolTip="Settings"
+                            Click="BtnSettings_Click">
+                        <SymbolIcon Symbol="Setting" />
+                    </Button>
+                </Grid>
+            </TabView.TabStripFooter>
 
             <TabViewItem Header="Work Items" IsClosable="False">
                 <TabViewItem.IconSource>

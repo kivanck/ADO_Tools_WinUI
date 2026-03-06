@@ -14,7 +14,7 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- ROW 0 — Connection & Folder -->
+        <!-- ROW 0 â€” Connection & Folder -->
         <Border Grid.Row="0"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
@@ -41,14 +41,18 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   Text="Project"
+                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                   VerticalAlignment="Center" />
                         <TextBox x:Name="txtProjectName"
-                                 Grid.Column="0"
-                                 Header="Project"
+                                 Grid.Column="1"
                                  PlaceholderText="e.g. Civil"
                                  Width="160" />
                         <Button x:Name="btnConnect"
-                                Grid.Column="1"
+                                Grid.Column="2"
                                 VerticalAlignment="Bottom" Height="32"
                                 Style="{StaticResource AccentButtonStyle}"
                                 Click="BtnConnect_Click">
@@ -92,7 +96,7 @@
             </Grid>
         </Border>
 
-        <!-- ROW 1 — Query & Actions -->
+        <!-- ROW 1 â€” Query & Actions -->
         <Border Grid.Row="1"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
@@ -118,9 +122,8 @@
                     </Grid.ColumnDefinitions>
                     <ComboBox x:Name="cmbQueries"
                               Grid.Column="0"
-                              Header="Queries"
                               HorizontalAlignment="Stretch"
-                              PlaceholderText="Connect to project first…" />
+                              PlaceholderText="Connect to project firstâ€¦" />
                     <Button x:Name="btnReadItems"
                             Grid.Column="1"
                             VerticalAlignment="Bottom" Height="32"
@@ -137,14 +140,12 @@
                 <!-- Action buttons -->
                 <Grid ColumnSpacing="10">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />  <!-- 0: Download Selected -->
+                        <ColumnDefinition Width="Auto" />  <!-- 1: Compare -->
+                        <ColumnDefinition Width="Auto" />  <!-- 2: Highlight days -->
+                        <ColumnDefinition Width="*" />     <!-- 3: Spacer -->
+                        <ColumnDefinition Width="Auto" />  <!-- 4: Item ID -->
+                        <ColumnDefinition Width="Auto" />  <!-- 5: Download Single -->
                     </Grid.ColumnDefinitions>
 
                     <Button x:Name="btnDownloadSelected"
@@ -170,17 +171,17 @@
                         </StackPanel>
                     </Button>
 
-                    <StackPanel Grid.Column="2" Spacing="6">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <Border Background="#CA5010"
-                                    CornerRadius="4" Width="22" Height="22">
-                                <FontIcon Glyph="&#xE7E6;" FontSize="11" Foreground="White"
-                                          HorizontalAlignment="Center" VerticalAlignment="Center" />
-                            </Border>
-                            <TextBlock Text="Highlight days"
-                                       Style="{StaticResource CaptionTextBlockStyle}"
-                                       VerticalAlignment="Center" />
-                        </StackPanel>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8"
+                                VerticalAlignment="Bottom">
+                        <Border Background="#CA5010"
+                                CornerRadius="4" Width="22" Height="22"
+                                VerticalAlignment="Center">
+                            <FontIcon Glyph="&#xE7E6;" FontSize="11" Foreground="White"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <TextBlock Text="Highlight days"
+                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                   VerticalAlignment="Center" />
                         <NumberBox x:Name="numHighlightDays"
                                    Value="5" Minimum="0" Maximum="365"
                                    SpinButtonPlacementMode="Compact"
@@ -189,16 +190,18 @@
                     </StackPanel>
 
                     <!-- Single item download -->
-                    <StackPanel Grid.Column="5" Spacing="6">
+                    <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="8"
+                                VerticalAlignment="Bottom">
                         <TextBlock Text="Item ID"
-                                   Style="{StaticResource CaptionTextBlockStyle}" />
+                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                   VerticalAlignment="Center" />
                         <NumberBox x:Name="txtSingleItemId"
                                    PlaceholderText="e.g. 102654"
                                    Width="120"
                                    SpinButtonPlacementMode="Hidden" />
                     </StackPanel>
                     <Button x:Name="btnDownloadSingle"
-                            Grid.Column="6"
+                            Grid.Column="5"
                             IsEnabled="False" Height="32"
                             VerticalAlignment="Bottom"
                             Click="BtnDownloadSingle_Click">
@@ -208,16 +211,11 @@
                         </StackPanel>
                     </Button>
 
-                    <TextBlock x:Name="lblItemCount"
-                               Grid.Column="7"
-                               VerticalAlignment="Bottom"
-                               Margin="0,0,0,6"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 </Grid>
             </StackPanel>
         </Border>
 
-        <!-- ROW 2 — Work Items List -->
+        <!-- ROW 2 â€” Work Items List -->
         <Border Grid.Row="2"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
@@ -232,7 +230,14 @@
                 <Border Grid.Row="0" Padding="20,14,20,10"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                         BorderThickness="0,0,0,1">
-                    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                  <Grid>
+                    <Grid.ColumnDefinitions>                      
+                      <ColumnDefinition Width="Auto" /><!-- 2: Highlight days -->
+                      <ColumnDefinition Width="*" /><!-- 3: Spacer -->
+                      <ColumnDefinition Width="Auto" /><!-- 4: Item ID -->
+                     </Grid.ColumnDefinitions>
+                    <!-- 4: Item ID -->
+                    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center" Grid.Column="0">
                         <Border Background="#6B69D6"
                                 CornerRadius="6" Width="28" Height="28">
                             <FontIcon Glyph="&#xE8FD;" FontSize="14" Foreground="White"
@@ -241,7 +246,13 @@
                         <TextBlock Text="Work Items"
                                    Style="{StaticResource BodyStrongTextBlockStyle}"
                                    VerticalAlignment="Center" />
-                    </StackPanel>
+                      </StackPanel>
+                      <TextBlock x:Name="lblItemCount"
+                                Grid.Column="3"
+                                VerticalAlignment="Bottom"
+                                Margin="0,0,0,6"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                  </Grid>
                 </Border>
 
                 <ListView Grid.Row="1"
@@ -299,7 +310,7 @@
             </Grid>
         </Border>
 
-        <!-- ROW 3 — Status Bar -->
+        <!-- ROW 3 â€” Status Bar -->
         <Border Grid.Row="3"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
