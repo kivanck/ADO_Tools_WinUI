@@ -6,7 +6,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
-    <Grid Padding="24,16,24,24" RowSpacing="12">
+    <Grid Padding="24,20,24,20" RowSpacing="1">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -14,88 +14,128 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- ROW 0 — Connection & Folder Card -->
+        <!-- ROW 0 — Connection & Folder -->
         <Border Grid.Row="0"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                BorderThickness="1" CornerRadius="8" Padding="16">
-            <Grid ColumnSpacing="12" RowSpacing="10">
+                BorderThickness="1" CornerRadius="8" Padding="20">
+            <Grid ColumnSpacing="24">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="24" />
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <TextBox x:Name="txtProjectName"
-                         Grid.Column="0"
-                         Header="Project"
-                         PlaceholderText="e.g. Civil"
-                         Width="160" />
-
-                <Button x:Name="btnConnect"
-                        Grid.Column="1"
-                        VerticalAlignment="Bottom"
-                        Style="{StaticResource AccentButtonStyle}"
-                        Click="BtnConnect_Click">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <SymbolIcon Symbol="Globe" />
-                        <TextBlock Text="Connect" />
+                <!-- Connection -->
+                <StackPanel Grid.Column="0" Spacing="14">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Border Background="{ThemeResource SystemAccentColorDark1}"
+                                CornerRadius="6" Width="28" Height="28">
+                            <FontIcon Glyph="&#xE774;" FontSize="14" Foreground="White"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <TextBlock Text="Connection"
+                                   Style="{StaticResource BodyStrongTextBlockStyle}"
+                                   VerticalAlignment="Center" />
                     </StackPanel>
-                </Button>
+                    <Grid ColumnSpacing="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="txtProjectName"
+                                 Grid.Column="0"
+                                 Header="Project"
+                                 PlaceholderText="e.g. Civil"
+                                 Width="160" />
+                        <Button x:Name="btnConnect"
+                                Grid.Column="1"
+                                VerticalAlignment="Bottom" Height="32"
+                                Style="{StaticResource AccentButtonStyle}"
+                                Click="BtnConnect_Click">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE774;" FontSize="14" />
+                                <TextBlock Text="Connect" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                </StackPanel>
 
-                <TextBox x:Name="txtRootFolder"
-                         Grid.Column="3"
-                         Header="Download Root Folder"
-                         PlaceholderText="e.g. D:\ADO_Items" />
-
-                <Button x:Name="btnBrowseFolder"
-                        Grid.Column="4"
-                        VerticalAlignment="Bottom"
-                        Content="Browse…"
-                        Click="BtnBrowseFolder_Click" />
+                <!-- Download Folder -->
+                <StackPanel Grid.Column="1" Spacing="14">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Border Background="#107C10"
+                                CornerRadius="6" Width="28" Height="28">
+                            <FontIcon Glyph="&#xED25;" FontSize="14" Foreground="White"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <TextBlock Text="Download Folder"
+                                   Style="{StaticResource BodyStrongTextBlockStyle}"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="txtRootFolder"
+                                 Grid.Column="0"
+                                 PlaceholderText="e.g. D:\ADO_Items" />
+                        <Button x:Name="btnBrowseFolder"
+                                Grid.Column="1"
+                                VerticalAlignment="Bottom" Height="32"
+                                ToolTipService.ToolTip="Browse for folder"
+                                Click="BtnBrowseFolder_Click">
+                            <FontIcon Glyph="&#xED25;" FontSize="14" />
+                        </Button>
+                    </Grid>
+                </StackPanel>
             </Grid>
         </Border>
 
-        <!-- ROW 1 — Query & Actions Card -->
+        <!-- ROW 1 — Query & Actions -->
         <Border Grid.Row="1"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                BorderThickness="1" CornerRadius="8" Padding="16">
-            <Grid RowSpacing="10">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
+                BorderThickness="1" CornerRadius="8" Padding="20">
+            <StackPanel Spacing="14">
 
-                <!-- Query row -->
-                <Grid Grid.Row="0" ColumnSpacing="12">
+                <!-- Query Selection -->
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Border Background="#0078D4"
+                            CornerRadius="6" Width="28" Height="28">
+                        <FontIcon Glyph="&#xE8A7;" FontSize="14" Foreground="White"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock Text="Query &amp; Actions"
+                               Style="{StaticResource BodyStrongTextBlockStyle}"
+                               VerticalAlignment="Center" />
+                </StackPanel>
+
+                <Grid ColumnSpacing="12">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-
                     <ComboBox x:Name="cmbQueries"
                               Grid.Column="0"
                               Header="Queries"
                               HorizontalAlignment="Stretch"
                               PlaceholderText="Connect to project first…" />
-
                     <Button x:Name="btnReadItems"
                             Grid.Column="1"
-                            VerticalAlignment="Bottom"
+                            VerticalAlignment="Bottom" Height="32"
                             IsEnabled="False"
+                            Style="{StaticResource AccentButtonStyle}"
                             Click="BtnReadItems_Click">
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <SymbolIcon Symbol="Refresh" />
+                            <FontIcon Glyph="&#xE9F5;" FontSize="14" />
                             <TextBlock Text="Read Items" />
                         </StackPanel>
                     </Button>
                 </Grid>
 
-                <!-- Action buttons row -->
-                <Grid Grid.Row="1" ColumnSpacing="12">
+                <!-- Action buttons -->
+                <Grid ColumnSpacing="10">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
@@ -109,136 +149,176 @@
 
                     <Button x:Name="btnDownloadSelected"
                             Grid.Column="0"
-                            IsEnabled="False"
+                            IsEnabled="False" Height="32"
+                            VerticalAlignment="Bottom"
                             Click="BtnDownloadSelected_Click">
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <SymbolIcon Symbol="Download" />
+                            <FontIcon Glyph="&#xE896;" FontSize="14" />
                             <TextBlock Text="Download Selected" />
                         </StackPanel>
                     </Button>
 
                     <Button x:Name="btnCompare"
                             Grid.Column="1"
-                            IsEnabled="False"
+                            IsEnabled="False" Height="32"
+                            VerticalAlignment="Bottom"
                             ToolTipService.ToolTip="Find similar work items"
                             Click="BtnCompare_Click">
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <SymbolIcon Symbol="Find" />
+                            <FontIcon Glyph="&#xE721;" FontSize="14" />
                             <TextBlock Text="Compare" />
                         </StackPanel>
                     </Button>
 
-                    <TextBlock Grid.Column="2"
-                               Text="Highlight"
-                               VerticalAlignment="Center" />
-                    <NumberBox x:Name="numHighlightDays"
-                               Grid.Column="3"
-                               Value="5" Minimum="0" Maximum="365"
-                               SpinButtonPlacementMode="Compact"
-                               Width="100"
-                               Header="days"
-                               ValueChanged="NumHighlightDays_ValueChanged" />
+                    <StackPanel Grid.Column="2" Spacing="6">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Border Background="#CA5010"
+                                    CornerRadius="4" Width="22" Height="22">
+                                <FontIcon Glyph="&#xE7E6;" FontSize="11" Foreground="White"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <TextBlock Text="Highlight days"
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                        <NumberBox x:Name="numHighlightDays"
+                                   Value="5" Minimum="0" Maximum="365"
+                                   SpinButtonPlacementMode="Compact"
+                                   Width="100"
+                                   ValueChanged="NumHighlightDays_ValueChanged" />
+                    </StackPanel>
 
                     <!-- Single item download -->
-                    <NumberBox x:Name="txtSingleItemId"
-                               Grid.Column="5"
-                               PlaceholderText="Item ID"
-                               Width="120"
-                               SpinButtonPlacementMode="Hidden" />
+                    <StackPanel Grid.Column="5" Spacing="6">
+                        <TextBlock Text="Item ID"
+                                   Style="{StaticResource CaptionTextBlockStyle}" />
+                        <NumberBox x:Name="txtSingleItemId"
+                                   PlaceholderText="e.g. 102654"
+                                   Width="120"
+                                   SpinButtonPlacementMode="Hidden" />
+                    </StackPanel>
                     <Button x:Name="btnDownloadSingle"
                             Grid.Column="6"
-                            IsEnabled="False"
+                            IsEnabled="False" Height="32"
+                            VerticalAlignment="Bottom"
                             Click="BtnDownloadSingle_Click">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <SymbolIcon Symbol="Download" />
+                            <FontIcon Glyph="&#xE896;" FontSize="14" />
                             <TextBlock Text="Download Single" />
                         </StackPanel>
                     </Button>
 
                     <TextBlock x:Name="lblItemCount"
                                Grid.Column="7"
-                               VerticalAlignment="Center"
+                               VerticalAlignment="Bottom"
+                               Margin="0,0,0,6"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 </Grid>
-            </Grid>
+            </StackPanel>
         </Border>
 
         <!-- ROW 2 — Work Items List -->
         <Border Grid.Row="2"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                BorderThickness="1" CornerRadius="8" Padding="4">
-            <ListView x:Name="listWorkItems"
-                      SelectionMode="Extended"
-                      IsItemClickEnabled="True"
-                      ItemClick="ListWorkItems_ItemClick"
-                      DoubleTapped="ListWorkItems_DoubleTapped">
-                <ListView.HeaderTemplate>
-                    <DataTemplate>
-                        <Grid Padding="12,8" ColumnSpacing="8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="70" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="90" />
-                                <ColumnDefinition Width="130" />
-                                <ColumnDefinition Width="90" />
-                                <ColumnDefinition Width="100" />
-                                <ColumnDefinition Width="180" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="ID" FontWeight="SemiBold" />
-                            <TextBlock Grid.Column="1" Text="Title" FontWeight="SemiBold" />
-                            <TextBlock Grid.Column="2" Text="State" FontWeight="SemiBold" />
-                            <TextBlock Grid.Column="3" Text="Created By" FontWeight="SemiBold" />
-                            <TextBlock Grid.Column="4" Text="Date" FontWeight="SemiBold" />
-                            <TextBlock Grid.Column="5" Text="Type" FontWeight="SemiBold" />
-                            <TextBlock Grid.Column="6" Text="Iteration" FontWeight="SemiBold" />
-                        </Grid>
-                    </DataTemplate>
-                </ListView.HeaderTemplate>
-                <ListView.ItemTemplate>
-                    <DataTemplate>
-                        <Grid Padding="12,6" ColumnSpacing="8" Background="{Binding RowBackground}">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="70" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="90" />
-                                <ColumnDefinition Width="130" />
-                                <ColumnDefinition Width="90" />
-                                <ColumnDefinition Width="100" />
-                                <ColumnDefinition Width="180" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="{Binding Id}" />
-                            <TextBlock Grid.Column="1" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
-                            <TextBlock Grid.Column="2" Text="{Binding State}" />
-                            <TextBlock Grid.Column="3" Text="{Binding CreatedBy}" TextTrimming="CharacterEllipsis" />
-                            <TextBlock Grid.Column="4" Text="{Binding CreatedDateShort}" />
-                            <TextBlock Grid.Column="5" Text="{Binding TypeName}" />
-                            <TextBlock Grid.Column="6" Text="{Binding IterationShort}" TextTrimming="CharacterEllipsis" />
-                        </Grid>
-                    </DataTemplate>
-                </ListView.ItemTemplate>
-            </ListView>
+                BorderThickness="1" CornerRadius="8">
+            <Grid RowSpacing="0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <!-- List Header -->
+                <Border Grid.Row="0" Padding="20,14,20,10"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="0,0,0,1">
+                    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                        <Border Background="#6B69D6"
+                                CornerRadius="6" Width="28" Height="28">
+                            <FontIcon Glyph="&#xE8FD;" FontSize="14" Foreground="White"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <TextBlock Text="Work Items"
+                                   Style="{StaticResource BodyStrongTextBlockStyle}"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+
+                <ListView Grid.Row="1"
+                          x:Name="listWorkItems"
+                          SelectionMode="Extended"
+                          IsItemClickEnabled="True"
+                          Padding="4"
+                          ItemClick="ListWorkItems_ItemClick"
+                          DoubleTapped="ListWorkItems_DoubleTapped">
+                    <ListView.HeaderTemplate>
+                        <DataTemplate>
+                            <Grid Padding="12,8" ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="70" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="90" />
+                                    <ColumnDefinition Width="130" />
+                                    <ColumnDefinition Width="90" />
+                                    <ColumnDefinition Width="100" />
+                                    <ColumnDefinition Width="180" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="ID" FontWeight="SemiBold" />
+                                <TextBlock Grid.Column="1" Text="Title" FontWeight="SemiBold" />
+                                <TextBlock Grid.Column="2" Text="State" FontWeight="SemiBold" />
+                                <TextBlock Grid.Column="3" Text="Created By" FontWeight="SemiBold" />
+                                <TextBlock Grid.Column="4" Text="Date" FontWeight="SemiBold" />
+                                <TextBlock Grid.Column="5" Text="Type" FontWeight="SemiBold" />
+                                <TextBlock Grid.Column="6" Text="Iteration" FontWeight="SemiBold" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListView.HeaderTemplate>
+                    <ListView.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Padding="12,6" ColumnSpacing="8" Background="{Binding RowBackground}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="70" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="90" />
+                                    <ColumnDefinition Width="130" />
+                                    <ColumnDefinition Width="90" />
+                                    <ColumnDefinition Width="100" />
+                                    <ColumnDefinition Width="180" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{Binding Id}" />
+                                <TextBlock Grid.Column="1" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Grid.Column="2" Text="{Binding State}" />
+                                <TextBlock Grid.Column="3" Text="{Binding CreatedBy}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Grid.Column="4" Text="{Binding CreatedDateShort}" />
+                                <TextBlock Grid.Column="5" Text="{Binding TypeName}" />
+                                <TextBlock Grid.Column="6" Text="{Binding IterationShort}" TextTrimming="CharacterEllipsis" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+            </Grid>
         </Border>
 
         <!-- ROW 3 — Status Bar -->
         <Border Grid.Row="3"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                BorderThickness="1" CornerRadius="8" Padding="12,8">
-            <Grid ColumnSpacing="16">
+                BorderThickness="1" CornerRadius="8" Padding="20,10">
+            <Grid ColumnSpacing="12">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <TextBlock x:Name="lblDownloading"
                            Grid.Column="0"
                            FontWeight="SemiBold"
-                           Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                           Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                           VerticalAlignment="Center" />
                 <TextBlock x:Name="lblSize"
                            Grid.Column="1"
-                           Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           VerticalAlignment="Center" />
                 <ProgressBar x:Name="progressBar"
                              Grid.Column="2"
                              IsIndeterminate="False"
