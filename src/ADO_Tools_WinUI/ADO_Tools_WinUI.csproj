@@ -19,9 +19,11 @@
     <Compile Remove="UI\**\*.cs" />
     <Compile Remove="UI\**\*.Designer.cs" />
     <Compile Remove="Properties\Settings.Designer.cs" />
+    <Compile Remove="Properties\Resources.Designer.cs" />
     <Compile Remove="Utilities\ListViewSorter.cs" />
     <EmbeddedResource Remove="UI\**\*.resx" />
     <EmbeddedResource Remove="Properties\Settings.settings" />
+    <EmbeddedResource Remove="Properties\Resources.resx" />
   </ItemGroup>
 
   <ItemGroup>
@@ -50,6 +52,20 @@
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.7705" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260209005" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+  </ItemGroup>
+  <ItemGroup>
+    <Page Update="MainWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Update="Pages\SettingsPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Update="Pages\SoftwareDownloadPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Update="Pages\WorkItemsPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
   </ItemGroup>
 
   <!--

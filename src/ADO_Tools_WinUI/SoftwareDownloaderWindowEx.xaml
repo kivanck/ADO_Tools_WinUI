@@ -1,0 +1,357 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="WinUIApp.SoftwareDownloaderWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="ADO Software Update Tool">
+
+    <Window.SystemBackdrop>
+        <MicaBackdrop />
+    </Window.SystemBackdrop>
+
+    <Grid RowSpacing="0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+      
+      
+      <!-- Custom title bar (draggable area, overlays the header) -->
+      <Grid x:Name="AppTitleBar" Height="32" VerticalAlignment="Top" Canvas.ZIndex="1" />
+      
+
+        <!-- ═══════════════ Title Bar / Header ═══════════════ -->
+        <Border Grid.Row="0"
+                Background="{ThemeResource SystemAccentColorDark2}"
+                Padding="28,18,28,18">
+            <Grid>
+                <StackPanel Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">
+                    <FontIcon Glyph="&#xE896;" FontSize="24" Foreground="White" />
+                    <StackPanel Spacing="0">
+                        <TextBlock Text="Software Downloader"
+                                   FontSize="18" FontWeight="SemiBold"
+                                   Foreground="White" />
+                        <TextBlock Text="Download and install builds from Azure DevOps"
+                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                   Foreground="#AAFFFFFF" />
+                    </StackPanel>
+                </StackPanel>
+                <TextBlock Text="kivanc.karakas@bentley.com"
+                           Style="{StaticResource CaptionTextBlockStyle}"
+                           Foreground="#66FFFFFF"
+                           HorizontalAlignment="Right" VerticalAlignment="Center" />
+            </Grid>
+        </Border>
+
+        <!-- ═══════════════ Main Content: Two-Column Layout ═══════════════ -->
+        <Grid Grid.Row="1" Padding="24,20,24,20" ColumnSpacing="20">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" MinWidth="380" />
+                <ColumnDefinition Width="*" MinWidth="340" />
+            </Grid.ColumnDefinitions>
+
+            <!-- ─────── LEFT COLUMN: Configuration ─────── -->
+            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
+                <Grid Padding="0,0,4,0" RowSpacing="1">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Product Selection -->
+                    <Border Grid.Row="0"
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1" CornerRadius="8" Padding="20">
+                        <StackPanel Spacing="14">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <Border Background="{ThemeResource SystemAccentColorDark1}"
+                                        CornerRadius="6" Width="28" Height="28">
+                                    <FontIcon Glyph="&#xE71D;" FontSize="14" Foreground="White"
+                                              HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                                <TextBlock Text="Product Selection"
+                                           Style="{StaticResource BodyStrongTextBlockStyle}"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ComboBox x:Name="cmbProductName"
+                                          Grid.Column="0"
+                                          Header="Product"
+                                          HorizontalAlignment="Stretch"
+                                          SelectionChanged="CmbProductName_SelectionChanged" />
+                                <Button x:Name="btnAddDefinition"
+                                        Grid.Column="1"
+                                        VerticalAlignment="Bottom" Height="32" Width="32"
+                                        ToolTipService.ToolTip="Add definition"
+                                        Click="BtnAddDefinition_Click">
+                                    <FontIcon Glyph="&#xE710;" FontSize="14" />
+                                </Button>
+                                <Button x:Name="btnRemoveDefinition"
+                                        Grid.Column="2"
+                                        VerticalAlignment="Bottom" Height="32" Width="32"
+                                        ToolTipService.ToolTip="Remove definition"
+                                        Click="BtnRemoveDefinition_Click">
+                                    <FontIcon Glyph="&#xE738;" FontSize="14" />
+                                </Button>
+                            </Grid>
+
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBox x:Name="txtDefinitionId"
+                                         Grid.Column="0"
+                                         Header="Definition ID"
+                                         PlaceholderText="e.g. 6098" />
+                                <TextBox x:Name="txtProject"
+                                         Grid.Column="1"
+                                         Header="Project"
+                                         PlaceholderText="e.g. civil" />
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Build Selection -->
+                    <Border Grid.Row="1"
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1" CornerRadius="8" Padding="20">
+                        <StackPanel Spacing="14">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <Border Background="#0078D4"
+                                        CornerRadius="6" Width="28" Height="28">
+                                    <FontIcon Glyph="&#xE9F5;" FontSize="14" Foreground="White"
+                                              HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                                <TextBlock Text="Build Selection"
+                                           Style="{StaticResource BodyStrongTextBlockStyle}"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <NumberBox x:Name="numBuildCount"
+                                           Grid.Column="0"
+                                           Header="# of builds"
+                                           Value="30" Minimum="1" Maximum="200"
+                                           SpinButtonPlacementMode="Compact"
+                                           Width="130" />
+                                <Button x:Name="btnLoadBuilds"
+                                        Grid.Column="1"
+                                        Content="Load Builds"
+                                        HorizontalAlignment="Stretch"
+                                        VerticalAlignment="Bottom" Height="36"
+                                        Style="{StaticResource AccentButtonStyle}"
+                                        Click="BtnLoadBuilds_Click" />
+                                <Button x:Name="btnShowBentleySoftware"
+                                        Grid.Column="2"
+                                        VerticalAlignment="Bottom" Height="36"
+                                        ToolTipService.ToolTip="Show installed Bentley products"
+                                        Click="BtnShowBentleySoftware_Click">
+                                    <FontIcon Glyph="&#xE71D;" FontSize="14" />
+                                </Button>
+                            </Grid>
+
+                            <ComboBox x:Name="cmbBuilds"
+                                      Header="Available Builds"
+                                      HorizontalAlignment="Stretch" />
+                        </StackPanel>
+                    </Border>
+
+                  <!-- Download Folder Test-->
+                  <Border Grid.Row="2"
+                          Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                          BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                          BorderThickness="1" CornerRadius="8" Padding="20">
+                    <StackPanel Spacing="14">
+                      <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Border Background="#107C10"
+                                CornerRadius="6" Width="28" Height="28">
+                          <FontIcon Glyph="&#xED25;" FontSize="14" Foreground="White"
+                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <TextBlock Text="Download Folder"
+                                   Style="{StaticResource BodyStrongTextBlockStyle}"
+                                   VerticalAlignment="Center" />
+                      </StackPanel>
+                      <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                          <ColumnDefinition Width="*" />
+                          <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="txtDownloadFolderTest"
+                                 Grid.Column="0"
+                                 PlaceholderText="Select a folder..."
+                                 IsReadOnly="True" />
+                        <Button x:Name="btnBrowseDownloadFolderTest"
+                                Grid.Column="1"
+                                VerticalAlignment="Bottom" Height="32"
+                                ToolTipService.ToolTip="Browse for folder"
+                                Click="BtnBrowseDownloadFolder_Click">
+                          <FontIcon Glyph="&#xED25;" FontSize="14" />
+                        </Button>
+                      </Grid>
+                    </StackPanel>
+                  </Border>
+                    
+                  <!-- Download Folder + Options (side by side) -->
+                    <Grid Grid.Row="3" ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Download Folder -->
+                        <Border Grid.Column="0"
+                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1" CornerRadius="8" Padding="20">
+                            <StackPanel Spacing="14">
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <Border Background="#107C10"
+                                            CornerRadius="6" Width="28" Height="28">
+                                        <FontIcon Glyph="&#xED25;" FontSize="14" Foreground="White"
+                                                  HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <TextBlock Text="Download Folder"
+                                               Style="{StaticResource BodyStrongTextBlockStyle}"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
+                                <Grid ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="txtDownloadFolder"
+                                             Grid.Column="0"
+                                             PlaceholderText="Select a folder..."
+                                             IsReadOnly="True" />
+                                    <Button x:Name="btnBrowseDownloadFolder"
+                                            Grid.Column="1"
+                                            VerticalAlignment="Bottom" Height="32"
+                                            ToolTipService.ToolTip="Browse for folder"
+                                            Click="BtnBrowseDownloadFolder_Click">
+                                        <FontIcon Glyph="&#xED25;" FontSize="14" />
+                                    </Button>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Options -->
+                        <Border Grid.Column="1"
+                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1" CornerRadius="8" Padding="20">
+                            <StackPanel Spacing="14">
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <Border Background="#CA5010"
+                                            CornerRadius="6" Width="28" Height="28">
+                                        <FontIcon Glyph="&#xE713;" FontSize="14" Foreground="White"
+                                                  HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <TextBlock Text="Options"
+                                               Style="{StaticResource BodyStrongTextBlockStyle}"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
+                                <ToggleSwitch x:Name="toggleDownloadOnly"
+                                              Header="Download Only"
+                                              OffContent="Off" OnContent="On" />
+                                <ToggleSwitch x:Name="toggleCleanUninstall"
+                                              Header="Clean Uninstall"
+                                              OffContent="Off" OnContent="On" />
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+
+                    <!-- Spacer: absorbs remaining vertical space -->
+                    <Border Grid.Row="4" />
+
+                    <!-- Run Update Button pinned to bottom -->
+                    <Button x:Name="btnUpdate"
+                            Grid.Row="5"
+                            HorizontalAlignment="Stretch"
+                            Height="44"
+                            Style="{StaticResource AccentButtonStyle}"
+                            Click="BtnUpdate_Click">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <FontIcon Glyph="&#xE896;" FontSize="16" />
+                            <TextBlock Text="Run Update" FontWeight="SemiBold" />
+                        </StackPanel>
+                    </Button>
+
+                </Grid>
+            </ScrollViewer>
+
+            <!-- ─────── RIGHT COLUMN: Log Output ─────── -->
+            <Border Grid.Column="1"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8">
+                <Grid RowSpacing="0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Log Header -->
+                    <Border Grid.Row="0" Padding="20,16,20,12"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="0,0,0,1">
+                        <Grid>
+                            <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                                <Border Background="#6B69D6"
+                                        CornerRadius="6" Width="28" Height="28">
+                                    <FontIcon Glyph="&#xE756;" FontSize="14" Foreground="White"
+                                              HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                                <TextBlock Text="Log Output"
+                                           Style="{StaticResource BodyStrongTextBlockStyle}"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                            <Button x:Name="btnClearLog"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Center"
+                                    ToolTipService.ToolTip="Clear log"
+                                    Click="BtnClearLog_Click">
+                                <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                            </Button>
+                        </Grid>
+                    </Border>
+
+                    <!-- Log Content -->
+                    <ScrollViewer x:Name="logScrollViewer"
+                                  Grid.Row="1"
+                                  VerticalScrollBarVisibility="Auto"
+                                  Padding="16,12,16,12">
+                        <TextBlock x:Name="txtLog"
+                                   TextWrapping="Wrap"
+                                   IsTextSelectionEnabled="True"
+                                   FontFamily="Cascadia Code, Consolas, Courier New"
+                                   FontSize="12"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+
+        </Grid>
+    </Grid>
+</Window>

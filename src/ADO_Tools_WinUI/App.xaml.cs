@@ -29,6 +29,11 @@ namespace ADO_Tools_WinUI
         private Window? _window;
 
         /// <summary>
+        /// The main application window. Used by pages that need the window handle (e.g. file pickers).
+        /// </summary>
+        public static Window MainWindow { get; private set; } = null!;
+
+        /// <summary>
         /// Initializes the singleton application object.  This is the first line of authored code
         /// executed, and as such is the logical equivalent of main() or WinMain().
         /// </summary>
@@ -45,6 +50,7 @@ namespace ADO_Tools_WinUI
         protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
         {
             _window = new MainWindow();
+            MainWindow = _window;
             _window.Activate();
         }
     }

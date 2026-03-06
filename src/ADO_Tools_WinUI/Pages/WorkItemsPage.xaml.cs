@@ -1,0 +1,517 @@
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.IO;
+using System.Linq;
+using System.Text.RegularExpressions;
+using ADO_Tools.Models;
+using ADO_Tools.Services;
+using ADO_Tools.Utilities;
+using ADO_Tools_WinUI.Services;
+using Microsoft.UI;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
+using Windows.Storage.Pickers;
+
+namespace ADO_Tools_WinUI.Pages
+{
+    public sealed partial class WorkItemsPage : Page
+    {
+        private TfsRestClient? _tfsRest;
+        private List<QueryDto> _queryList = new();
+        private List<WorkItemDto> _workItemList = new();
+        private readonly ObservableCollection<WorkItemRow> _rows = new();
+
+        public WorkItemsPage()
+        {
+            InitializeComponent();
+            Loaded += WorkItemsPage_Loaded;
+        }
+
+        private void WorkItemsPage_Loaded(object sender, RoutedEventArgs e)
+        {
+            var s = AppSettings.Default;
+            txtProjectName.Text = s.Project;
+            txtRootFolder.Text = s.RootFolder;
+            listWorkItems.ItemsSource = _rows;
+        }
+
+        // ?? View Model Row ??????????????????????????????????????????????
+
+        public class WorkItemRow
+        {
+            public int Id { get; set; }
+            public string Title { get; set; } = "";
+            public string State { get; set; } = "";
+            public string CreatedBy { get; set; } = "";
+            public string CreatedDateShort { get; set; } = "";
+            public string TypeName { get; set; } = "";
+            public string IterationShort { get; set; } = "";
+            public DateTime CreatedDate { get; set; }
+            public bool Downloaded { get; set; }
+            public Brush? RowBackground { get; set; }
+        }
+
+        // ?? Helpers ?????????????????????????????????????????????????????
+
+        private void PersistSettings()
+        {
+            var s = AppSettings.Default;
+            s.Project = txtProjectName.Text.Trim();
+            s.RootFolder = txtRootFolder.Text.Trim();
+            s.Save();
+        }
+
+        private async void ShowMessage(string message, string title = "")
+        {
+            await new ContentDialog
+            {
+                Title = title,
+                Content = message,
+                CloseButtonText = "OK",
+                XamlRoot = this.XamlRoot
+            }.ShowAsync();
+        }
+
+        private string ReadTopFolder()
+        {
+            string folder = txtRootFolder.Text.Trim();
+            if (!Directory.Exists(folder))
+                folder = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+            if (!folder.EndsWith(Path.DirectorySeparatorChar))
+                folder += Path.DirectorySeparatorChar;
+            return folder;
+        }
+
+        private static string CreateFolder(string topFolder, string subFolder)
+        {
+            string path = Path.Combine(topFolder, subFolder);
+            Directory.CreateDirectory(path);
+            return path;
+        }
+
+        private static string RemoveIllegalCharacters(string input)
+        {
+            string pattern = $"[{Regex.Escape(new string(Path.GetInvalidFileNameChars()) + new string(Path.GetInvalidPathChars()))}]";
+            input = Regex.Replace(input, pattern, "").Trim();
+            return input.Length > 200 ? input[..200] : input;
+        }
+
+        private static string CalculateAttachmentSize(WorkItemDto workItem)
+        {
+            double size = workItem.Attachments.Sum(a => (double)a.Length);
+            string[] units = { "B", "KB", "MB", "GB", "TB" };
+            int order = 0;
+            while (size >= 1024 && order < units.Length - 1)
+            {
+                order++;
+                size /= 1024;
+            }
+            return $"{size:0.##} {units[order]}";
+        }
+
+        private void HighlightRows()
+        {
+            int days = (int)numHighlightDays.Value;
+            var now = DateTime.Now;
+            var highlightBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(40, 0, 120, 215));
+
+            foreach (var row in _rows)
+            {
+                bool recent = row.CreatedDate.AddDays(days) > now;
+                row.RowBackground = recent ? highlightBrush : null;
+            }
+
+            // Force refresh by reassigning source
+            listWorkItems.ItemsSource = null;
+            listWorkItems.ItemsSource = _rows;
+        }
+
+        private List<WorkItemRow> BuildRows(List<WorkItemDto> items)
+        {
+            return items.Select(wi => new WorkItemRow
+            {
+                Id = wi.Id,
+                Title = wi.Title ?? "",
+                State = wi.State ?? "",
+                CreatedBy = wi.CreatedBy ?? "",
+                CreatedDate = wi.CreatedDate,
+                CreatedDateShort = wi.CreatedDate.ToShortDateString(),
+                TypeName = wi.TypeName ?? "",
+                IterationShort = (wi.IterationPath ?? "").Replace("Civil Design\\Civil Designer Products\\", "")
+            }).ToList();
+        }
+
+        // ?? Event Handlers ??????????????????????????????????????????????
+
+        private async void BtnConnect_Click(object sender, RoutedEventArgs e)
+        {
+            string project = txtProjectName.Text.Trim();
+            if (string.IsNullOrEmpty(project))
+            {
+                ShowMessage("Please provide a Project Name.", "Missing Information");
+                return;
+            }
+
+            var settings = AppSettings.Default;
+            if (string.IsNullOrWhiteSpace(settings.Organization) || string.IsNullOrWhiteSpace(settings.PersonalAccessToken))
+            {
+                ShowMessage("Organization and PAT are not set. Check Settings.", "Missing Configuration");
+                return;
+            }
+
+            btnConnect.IsEnabled = false;
+            progressBar.IsIndeterminate = true;
+            progressBar.Visibility = Visibility.Visible;
+
+            try
+            {
+                _tfsRest = new TfsRestClient(settings.Organization, project, settings.PersonalAccessToken);
+                _queryList = await _tfsRest.GetQueriesAsync();
+
+                cmbQueries.Items.Clear();
+                foreach (var q in _queryList)
+                    cmbQueries.Items.Add(new ComboBoxItem { Content = q.Path });
+
+                if (cmbQueries.Items.Count > 0)
+                    cmbQueries.SelectedIndex = 0;
+
+                btnReadItems.IsEnabled = true;
+                btnDownloadSelected.IsEnabled = true;
+                btnDownloadSingle.IsEnabled = true;
+                btnCompare.IsEnabled = true;
+            }
+            catch (Exception ex)
+            {
+                ShowMessage("Failed to connect or load queries: " + ex.Message, "Error");
+                btnReadItems.IsEnabled = false;
+                btnDownloadSelected.IsEnabled = false;
+                btnDownloadSingle.IsEnabled = false;
+                btnCompare.IsEnabled = false;
+            }
+
+            progressBar.IsIndeterminate = false;
+            progressBar.Visibility = Visibility.Collapsed;
+            btnConnect.IsEnabled = true;
+            PersistSettings();
+        }
+
+        private async void BtnReadItems_Click(object sender, RoutedEventArgs e)
+        {
+            if (_tfsRest == null || _queryList.Count == 0) return;
+
+            var selectedItem = cmbQueries.SelectedItem as ComboBoxItem;
+            if (selectedItem == null) return;
+            string queryPath = (string)selectedItem.Content;
+
+            var q = _queryList.FirstOrDefault(x => x.Path == queryPath);
+            if (q == null) return;
+
+            string wiql = q.Wiql ?? "";
+
+            lblItemCount.Text = "Reading…";
+            btnReadItems.IsEnabled = false;
+            progressBar.IsIndeterminate = true;
+            progressBar.Visibility = Visibility.Visible;
+            _rows.Clear();
+
+            try
+            {
+                _workItemList = await _tfsRest.QueryWorkItemsAsync(wiql);
+            }
+            catch (Exception ex)
+            {
+                ShowMessage("Failed to run query: " + ex.Message, "Error");
+                _workItemList = new List<WorkItemDto>();
+            }
+
+            if (_workItemList.Count == 0)
+            {
+                lblItemCount.Text = "0 items";
+            }
+            else
+            {
+                foreach (var row in BuildRows(_workItemList))
+                    _rows.Add(row);
+
+                lblItemCount.Text = $"{_workItemList.Count} items";
+                HighlightRows();
+            }
+
+            progressBar.IsIndeterminate = false;
+            progressBar.Visibility = Visibility.Collapsed;
+            btnReadItems.IsEnabled = true;
+        }
+
+        private async void BtnDownloadSelected_Click(object sender, RoutedEventArgs e)
+        {
+            if (_tfsRest == null) return;
+            var selected = listWorkItems.SelectedItems.OfType<WorkItemRow>().ToList();
+            if (selected.Count == 0)
+            {
+                ShowMessage("Select one or more work items first.");
+                return;
+            }
+
+            progressBar.IsIndeterminate = true;
+            progressBar.Visibility = Visibility.Visible;
+            btnDownloadSelected.IsEnabled = false;
+
+            foreach (var row in selected)
+            {
+                var workItem = _workItemList.FirstOrDefault(w => w.Id == row.Id);
+                if (workItem == null) continue;
+
+                string sizeText = CalculateAttachmentSize(workItem);
+                lblDownloading.Text = $"Downloading #{workItem.Id}";
+                lblSize.Text = $"{workItem.Attachments.Count} Attachment(s): {sizeText}";
+
+                string path = CreateFolder(ReadTopFolder(), workItem.Id.ToString()) + Path.DirectorySeparatorChar;
+
+                string htmlPath = Path.Combine(path, RemoveIllegalCharacters(workItem.Title ?? "") + ".html");
+                string url = workItem.HtmlUrl ?? "";
+                File.WriteAllText(htmlPath,
+                    $"<h1><a href=\"{System.Net.WebUtility.HtmlEncode(url)}\">{System.Net.WebUtility.HtmlEncode(workItem.Title ?? "")}</a></h1>");
+
+                foreach (var att in workItem.Attachments)
+                {
+                    try { await _tfsRest.DownloadAttachmentAsync(att, path); }
+                    catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Attachment download failed: {ex.Message}"); }
+                }
+
+                row.Downloaded = true;
+            }
+
+            lblDownloading.Text = "Download Complete";
+            lblSize.Text = "";
+            progressBar.IsIndeterminate = false;
+            progressBar.Visibility = Visibility.Collapsed;
+            btnDownloadSelected.IsEnabled = true;
+        }
+
+        private async void BtnDownloadSingle_Click(object sender, RoutedEventArgs e)
+        {
+            if (_tfsRest == null) return;
+            if (double.IsNaN(txtSingleItemId.Value)) return;
+            int elementId = (int)txtSingleItemId.Value;
+
+            progressBar.IsIndeterminate = true;
+            progressBar.Visibility = Visibility.Visible;
+
+            WorkItemDto? workItem;
+            try
+            {
+                workItem = await _tfsRest.GetWorkItemAsync(elementId);
+            }
+            catch (Exception ex)
+            {
+                ShowMessage("Failed to fetch work item: " + ex.Message, "Error");
+                progressBar.IsIndeterminate = false;
+                progressBar.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            if (workItem == null)
+            {
+                ShowMessage($"Work item #{elementId} not found.");
+                progressBar.IsIndeterminate = false;
+                progressBar.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            string sizeText = CalculateAttachmentSize(workItem);
+            lblDownloading.Text = $"Downloading #{workItem.Id}";
+            lblSize.Text = $"{workItem.Attachments.Count} Attachment(s): {sizeText}";
+
+            string path = CreateFolder(ReadTopFolder(), workItem.Id.ToString()) + Path.DirectorySeparatorChar;
+            string htmlPath = Path.Combine(path, RemoveIllegalCharacters(workItem.Title ?? "") + ".html");
+            string url = workItem.HtmlUrl ?? "";
+            File.WriteAllText(htmlPath,
+                $"<h1><a href=\"{System.Net.WebUtility.HtmlEncode(url)}\">{System.Net.WebUtility.HtmlEncode(workItem.Title ?? "")}</a></h1>");
+
+            foreach (var att in workItem.Attachments)
+            {
+                try { await _tfsRest.DownloadAttachmentAsync(att, path); }
+                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Attachment download failed: {ex.Message}"); }
+            }
+
+            lblDownloading.Text = "Download Complete";
+            lblSize.Text = "";
+            progressBar.IsIndeterminate = false;
+            progressBar.Visibility = Visibility.Collapsed;
+        }
+
+        private async void BtnCompare_Click(object sender, RoutedEventArgs e)
+        {
+            if (_tfsRest == null || _queryList.Count == 0) return;
+
+            var selected = listWorkItems.SelectedItems.OfType<WorkItemRow>().FirstOrDefault();
+            if (selected == null)
+            {
+                ShowMessage("Select a work item to compare.");
+                return;
+            }
+
+            var workItem = _workItemList.FirstOrDefault(w => w.Id == selected.Id);
+            if (workItem == null) return;
+
+            // Ask user which query to compare against
+            var queryCmb = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, PlaceholderText = "Select query" };
+            foreach (var q in _queryList)
+                queryCmb.Items.Add(new ComboBoxItem { Content = q.Path });
+            if (queryCmb.Items.Count > 0) queryCmb.SelectedIndex = 0;
+
+            var topNBox = new NumberBox { Header = "Show top matches", Value = 20, Minimum = 1, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact, Width = 150 };
+
+            var panel = new StackPanel { Spacing = 12 };
+            panel.Children.Add(new TextBlock { Text = $"Finding items similar to #{workItem.Id}: {workItem.Title}", TextWrapping = TextWrapping.Wrap });
+            panel.Children.Add(queryCmb);
+            panel.Children.Add(topNBox);
+
+            var setupDialog = new ContentDialog
+            {
+                Title = "Compare Work Items",
+                Content = panel,
+                PrimaryButtonText = "Find Similar",
+                CloseButtonText = "Cancel",
+                XamlRoot = this.XamlRoot
+            };
+
+            if (await setupDialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+            var selectedQuery = queryCmb.SelectedItem as ComboBoxItem;
+            if (selectedQuery == null) return;
+            var queryPath = (string)selectedQuery.Content;
+            var q2 = _queryList.FirstOrDefault(x => x.Path == queryPath);
+            if (q2 == null) return;
+
+            progressBar.IsIndeterminate = true;
+            progressBar.Visibility = Visibility.Visible;
+
+            List<WorkItemDto> compareItems;
+            try
+            {
+                string wiql = q2.Wiql ?? "";
+                compareItems = await _tfsRest.QueryWorkItemsAsync(wiql);
+            }
+            catch (Exception ex)
+            {
+                ShowMessage("Failed to read query: " + ex.Message, "Error");
+                progressBar.IsIndeterminate = false;
+                progressBar.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            var comparer = new wordCompare();
+            var matches = new List<(WorkItemDto Item, int Score)>();
+
+            foreach (var candidate in compareItems)
+            {
+                if (candidate.Title == workItem.Title) continue;
+                int score = comparer.compareStrings(workItem.Title ?? "", candidate.Title ?? "");
+                if (score > 0)
+                    matches.Add((candidate, score));
+            }
+
+            matches = matches.OrderByDescending(m => m.Score).Take((int)topNBox.Value).ToList();
+
+            progressBar.IsIndeterminate = false;
+            progressBar.Visibility = Visibility.Collapsed;
+
+            // Show results in a dialog
+            var resultList = new ListView { SelectionMode = ListViewSelectionMode.None, MaxHeight = 400 };
+            resultList.HeaderTemplate = (DataTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(
+                @"<DataTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'>
+                    <Grid Padding='8,4' ColumnSpacing='8'>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width='50'/>
+                            <ColumnDefinition Width='60'/>
+                            <ColumnDefinition Width='*'/>
+                            <ColumnDefinition Width='80'/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column='0' Text='Score' FontWeight='SemiBold'/>
+                        <TextBlock Grid.Column='1' Text='ID' FontWeight='SemiBold'/>
+                        <TextBlock Grid.Column='2' Text='Title' FontWeight='SemiBold'/>
+                        <TextBlock Grid.Column='3' Text='State' FontWeight='SemiBold'/>
+                    </Grid>
+                </DataTemplate>");
+
+            foreach (var (item, score) in matches)
+            {
+                var row = new Grid { Padding = new Thickness(8, 4, 8, 4), ColumnSpacing = 8 };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(50) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
+
+                var tbScore = new TextBlock { Text = score.ToString() };
+                Grid.SetColumn(tbScore, 0);
+                var tbId = new TextBlock { Text = item.Id.ToString() };
+                Grid.SetColumn(tbId, 1);
+                var tbTitle = new TextBlock { Text = item.Title ?? "", TextTrimming = TextTrimming.CharacterEllipsis };
+                Grid.SetColumn(tbTitle, 2);
+                var tbState = new TextBlock { Text = item.State ?? "" };
+                Grid.SetColumn(tbState, 3);
+
+                row.Children.Add(tbScore);
+                row.Children.Add(tbId);
+                row.Children.Add(tbTitle);
+                row.Children.Add(tbState);
+                resultList.Items.Add(row);
+            }
+
+            if (matches.Count == 0)
+                resultList.Items.Add(new TextBlock { Text = "No matches found." });
+
+            await new ContentDialog
+            {
+                Title = $"Similar Items (top {matches.Count})",
+                Content = resultList,
+                CloseButtonText = "Close",
+                XamlRoot = this.XamlRoot
+            }.ShowAsync();
+        }
+
+        private void NumHighlightDays_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+        {
+            if (_rows.Count > 0)
+                HighlightRows();
+        }
+
+        private void ListWorkItems_DoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
+        {
+            if (listWorkItems.SelectedItem is not WorkItemRow row) return;
+            var workItem = _workItemList.FirstOrDefault(w => w.Id == row.Id);
+            if (workItem?.HtmlUrl == null) return;
+
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = workItem.HtmlUrl,
+                UseShellExecute = true
+            });
+        }
+
+        private void ListWorkItems_ItemClick(object sender, ItemClickEventArgs e)
+        {
+            // Selection handled by ListView built-in selection
+        }
+
+        private async void BtnBrowseFolder_Click(object sender, RoutedEventArgs e)
+        {
+            var picker = new FolderPicker();
+            picker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
+            picker.FileTypeFilter.Add("*");
+
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindow);
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+
+            var folder = await picker.PickSingleFolderAsync();
+            if (folder != null)
+            {
+                txtRootFolder.Text = folder.Path;
+                PersistSettings();
+            }
+        }
+    }
+}

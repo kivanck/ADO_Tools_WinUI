@@ -1,0 +1,85 @@
+<Page
+    x:Class="ADO_Tools_WinUI.Pages.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,16,0">
+        <StackPanel Spacing="8" MaxWidth="600" HorizontalAlignment="Left">
+
+            <!-- Connection settings card -->
+            <TextBlock Text="Azure DevOps Connection"
+                       Style="{StaticResource SubtitleTextBlockStyle}"
+                       Margin="0,0,0,4" />
+
+            <Grid ColumnSpacing="16" RowSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBox Grid.Row="0" Grid.Column="0"
+                         x:Name="txtOrganization"
+                         Header="Organisation"
+                         PlaceholderText="e.g. myorg" />
+
+                <TextBox Grid.Row="0" Grid.Column="1"
+                         x:Name="txtProject"
+                         Header="Default Project"
+                         PlaceholderText="e.g. Civil" />
+
+                <PasswordBox Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                             x:Name="txtPAT"
+                             Header="Personal Access Token (PAT)"
+                             PlaceholderText="Paste your PAT here" />
+
+                <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2"
+                            Orientation="Horizontal" Spacing="12">
+                    <Button x:Name="btnValidate"
+                            Content="Validate Connection"
+                            Style="{StaticResource AccentButtonStyle}"
+                            Click="BtnValidate_Click" />
+                    <InfoBar x:Name="ValidationStatus"
+                             IsOpen="False"
+                             IsClosable="False"
+                             Severity="Informational" />
+                </StackPanel>
+            </Grid>
+
+            <MenuFlyoutSeparator Margin="0,16" />
+
+            <!-- Paths settings card -->
+            <TextBlock Text="Paths"
+                       Style="{StaticResource SubtitleTextBlockStyle}"
+                       Margin="0,0,0,4" />
+
+            <TextBox x:Name="txtRootFolder"
+                     Header="Work Items Root Folder"
+                     PlaceholderText="e.g. D:\ADO_Items" />
+
+            <TextBox x:Name="txtDownloadFolder"
+                     Header="Software Download Folder"
+                     PlaceholderText="e.g. D:\Downloads\Builds" />
+
+            <MenuFlyoutSeparator Margin="0,16" />
+
+            <!-- About -->
+            <TextBlock Text="About"
+                       Style="{StaticResource SubtitleTextBlockStyle}"
+                       Margin="0,0,0,4" />
+            <TextBlock Text="ADO Tools for Azure DevOps"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            <TextBlock Text="kivanc.karakas@bentley.com"
+                       Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                       FontSize="12" />
+
+        </StackPanel>
+    </ScrollViewer>
+</Page>
