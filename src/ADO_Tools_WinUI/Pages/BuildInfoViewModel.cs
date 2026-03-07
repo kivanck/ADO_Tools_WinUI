@@ -16,7 +16,9 @@ namespace ADO_Tools_WinUI.Pages
         public int MinorVersion { get; set; }
         public int MinorVersionIteration { get; set; }
 
-        public SolidColorBrush VersionBrush => MajorVersion >= 24
+        public int LatestMajorVersion { get; set; }
+
+        public SolidColorBrush VersionBrush => MajorVersion >= LatestMajorVersion
             ? new SolidColorBrush(Colors.LimeGreen)
             : new SolidColorBrush(Colors.Orange);
 

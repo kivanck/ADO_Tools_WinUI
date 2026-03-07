@@ -1,7 +1,10 @@
+﻿using System;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using ADO_Tools.Services;
 using ADO_Tools_WinUI.Services;
 using Microsoft.UI.Xaml;
@@ -14,10 +17,16 @@ namespace ADO_Tools_WinUI.Pages
     {
         private List<BuildInfoViewModel> _allBuildViewModels = new();
         private List<TFSFunctions.BuildInfo> _builds = new();
+        private readonly ObservableCollection<LogEntryViewModel> _logEntries = new();
+
+        private static readonly Regex ProgressRegex = new(
+            @"Downloaded:\s*(?<current>[\d.]+)\s*MB\s*of\s*~?(?<total>[\d.]+)\s*MB\s*at\s*(?<speed>[\d.]+)\s*MB/s",
+            RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         public SoftwareDownloadPage()
         {
             InitializeComponent();
+            lvLog.ItemsSource = _logEntries;
             Loaded += SoftwareDownloadPage_Loaded;
         }
 
@@ -44,13 +53,14 @@ namespace ADO_Tools_WinUI.Pages
             }
         }
 
-        // ?? Helpers ??????????????????????????????????????????????????????
+        // ── Helpers ──────────────────────────────────────────────────────
 
         private static readonly string[] DefaultDefinitions =
         {
             "OpenRail Designer|6098|civil",
             "OpenRoads Designer|6057|civil",
-            "Overhead Line Designer|6289|civil"
+            "Overhead Line Designer|6289|civil",
+            "Microstation|5311|PowerPlatform"
         };
 
         private static void EnsureDefaultDefinitions()
@@ -145,9 +155,56 @@ namespace ADO_Tools_WinUI.Pages
         {
             DispatcherQueue.TryEnqueue(() =>
             {
-                txtLog.Text += message + Environment.NewLine;
-                logScrollViewer.ChangeView(null, logScrollViewer.ScrollableHeight, null);
+                bool isProgress = LogEntryViewModel.IsProgressMessage(message);
+
+                if (isProgress)
+                {
+                    UpdateDownloadStatus(message);
+                }
+                else if (downloadStatusPanel.Visibility == Visibility.Visible)
+                {
+                    HideDownloadStatus();
+                }
+
+                // For progress lines, update the last entry in-place instead of adding a new row
+                if (isProgress && _logEntries.Count > 0 && _logEntries[^1].IsProgressEntry)
+                {
+                    _logEntries[^1].Update(message);
+                    return;
+                }
+
+                var entry = LogEntryViewModel.Create(message);
+                _logEntries.Add(entry);
+                txtLogCount.Text = $"({_logEntries.Count})";
+
+                if (_logEntries.Count > 0)
+                    lvLog.ScrollIntoView(_logEntries[^1]);
             });
+        }
+
+        private void UpdateDownloadStatus(string message)
+        {
+            var match = ProgressRegex.Match(message);
+            if (!match.Success) return;
+
+            double current = double.Parse(match.Groups["current"].Value);
+            double total = double.Parse(match.Groups["total"].Value);
+            double speed = double.Parse(match.Groups["speed"].Value);
+
+            downloadStatusPanel.Visibility = Visibility.Visible;
+            downloadProgressBar.Maximum = total;
+            downloadProgressBar.Value = current;
+
+            txtDownloadStatus.Text = $"{current:F0} / {total:F0} MB";
+            txtDownloadSpeed.Text = $"{speed:F1} MB/s";
+        }
+
+        private void HideDownloadStatus()
+        {
+            downloadStatusPanel.Visibility = Visibility.Collapsed;
+            downloadProgressBar.Value = 0;
+            txtDownloadStatus.Text = "";
+            txtDownloadSpeed.Text = "";
         }
 
         private async void ShowMessage(string message, string title = "")
@@ -162,7 +219,7 @@ namespace ADO_Tools_WinUI.Pages
             await dialog.ShowAsync();
         }
 
-        // ?? Event Handlers ???????????????????????????????????????????????
+        // ── Event Handlers ───────────────────────────────────────────────
 
         private void CmbProductName_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
@@ -182,8 +239,8 @@ namespace ADO_Tools_WinUI.Pages
 
         private async void BtnAddDefinition_Click(object sender, RoutedEventArgs e)
         {
-            var nameBox = new TextBox { Header = "Product Name", PlaceholderText = "e.g. OpenRoads Designer" };
-            var idBox = new TextBox { Header = "Definition ID", PlaceholderText = "e.g. 6057" };
+            var nameBox = new TextBox { Header = "Product Name", PlaceholderText = "e.g. OpenRail Designer" };
+            var idBox = new TextBox { Header = "Definition ID", PlaceholderText = "e.g. 6098" };
             var projBox = new TextBox { Header = "Project", PlaceholderText = "e.g. civil" };
 
             var panel = new StackPanel { Spacing = 10 };
@@ -285,6 +342,13 @@ namespace ADO_Tools_WinUI.Pages
             _builds = await tfs.GetAvailableBuildsAsync(org, project, definitionId, pat, top);
 
             _allBuildViewModels = _builds.Select(BuildInfoViewModel.FromBuildInfo).ToList();
+
+            int latestMajor = _allBuildViewModels.Count > 0
+                ? _allBuildViewModels.Max(b => b.MajorVersion)
+                : 0;
+            foreach (var vm in _allBuildViewModels)
+                vm.LatestMajorVersion = latestMajor;
+
             lvBuilds.ItemsSource = _allBuildViewModels;
             buildFilterBox.Text = string.Empty;
 
@@ -435,8 +499,7 @@ namespace ADO_Tools_WinUI.Pages
 
         private async void BtnShowBentleySoftware_Click(object sender, RoutedEventArgs e)
         {
-            var installFunctions = new InstallFunctions();
-            var software = installFunctions.GetInstalledBentleySoftware().ToList();
+            var software = new InstallFunctions().GetInstalledBentleySoftware().ToList();
 
             if (software.Count == 0)
             {
@@ -444,25 +507,165 @@ namespace ADO_Tools_WinUI.Pages
                 return;
             }
 
+            // Column headers
+            var headerGrid = new Grid { Padding = new Thickness(12, 8, 12, 8) };
+            headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
+            headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var headerName = new TextBlock
+            {
+                Text = "Product",
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                FontSize = 12
+            };
+            var headerVersion = new TextBlock
+            {
+                Text = "Version",
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                FontSize = 12
+            };
+            Grid.SetColumn(headerName, 0);
+            Grid.SetColumn(headerVersion, 1);
+            headerGrid.Children.Add(headerName);
+            headerGrid.Children.Add(headerVersion);
+
+            // Software list with DataTemplate for Name + Version columns
+            var templateXaml =
+                @"<DataTemplate
+                    xmlns=""http://schemas.microsoft.com/winfx/2006/xaml/presentation""
+                    xmlns:x=""http://schemas.microsoft.com/winfx/2006/xaml"">
+                    <Grid Padding=""4,6"" ColumnSpacing=""8"">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width=""2*"" />
+                            <ColumnDefinition Width=""1*"" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column=""0""
+                                   Text=""{Binding DisplayName}""
+                                   FontFamily=""Cascadia Code, Consolas""
+                                   FontSize=""11""
+                                   TextTrimming=""CharacterEllipsis""
+                                   VerticalAlignment=""Center"" />
+                        <TextBlock Grid.Column=""1""
+                                   Text=""{Binding DisplayVersion}""
+                                   FontFamily=""Cascadia Code, Consolas""
+                                   FontSize=""11""
+                                   Foreground=""DodgerBlue""
+                                   TextTrimming=""CharacterEllipsis""
+                                   VerticalAlignment=""Center"" />
+                    </Grid>
+                </DataTemplate>";
+
             var listView = new ListView
             {
-                SelectionMode = ListViewSelectionMode.None,
-                MaxHeight = 400
+                SelectionMode = ListViewSelectionMode.Single,
+                MaxHeight = 300,
+                ItemsSource = software,
+                ItemTemplate = (DataTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(templateXaml)
             };
 
-            foreach (var sw in software)
+            // Clean uninstall checkbox
+            var cleanUninstallCheck = new CheckBox
             {
-                listView.Items.Add(new TextBlock
+                Content = "Clean Uninstall",
+                IsChecked = false,
+                Margin = new Thickness(0, 8, 0, 0)
+            };
+
+            // Uninstall button
+            var uninstallBtn = new Button
+            {
+                Content = "Uninstall Selected",
+                Style = (Style)Application.Current.Resources["AccentButtonStyle"],
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Height = 36,
+                Margin = new Thickness(0, 4, 0, 0),
+                IsEnabled = false
+            };
+
+            // Log output
+            var logBlock = new TextBlock
+            {
+                TextWrapping = TextWrapping.Wrap,
+                FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Cascadia Code, Consolas"),
+                FontSize = 11,
+                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
+            };
+            var logScroll = new ScrollViewer
+            {
+                MaxHeight = 120,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Content = logBlock,
+                Margin = new Thickness(0, 8, 0, 0),
+                Padding = new Thickness(10, 8, 10, 8),
+                BorderThickness = new Thickness(1),
+                BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                CornerRadius = new CornerRadius(4)
+            };
+
+            // Enable uninstall only when something is selected
+            listView.SelectionChanged += (_, _) =>
+            {
+                uninstallBtn.IsEnabled = listView.SelectedItem != null;
+            };
+
+            // Uninstall handler
+            uninstallBtn.Click += async (_, _) =>
+            {
+                if (listView.SelectedItem is not InstallFunctions.InstalledSoftwareInfo selected)
+                    return;
+
+                bool cleanUninstall = cleanUninstallCheck.IsChecked == true;
+                uninstallBtn.IsEnabled = false;
+                listView.IsEnabled = false;
+                logBlock.Text = string.Empty;
+
+                var inst = new InstallFunctions();
+                inst.StatusUpdated += (msg) =>
                 {
-                    Text = $"{sw.DisplayName}  �  {sw.DisplayVersion}",
-                    TextWrapping = TextWrapping.NoWrap
-                });
-            }
+                    DispatcherQueue.TryEnqueue(() =>
+                    {
+                        if (msg.StartsWith("Windows Installer is running.", StringComparison.OrdinalIgnoreCase)
+                            && logBlock.Text.Contains("Windows Installer is running."))
+                        {
+                            var lines = logBlock.Text.Split(Environment.NewLine).ToList();
+                            int idx = lines.FindLastIndex(l => l.StartsWith("Windows Installer is running."));
+                            if (idx >= 0)
+                                lines[idx] = msg;
+                            logBlock.Text = string.Join(Environment.NewLine, lines);
+                        }
+                        else
+                        {
+                            logBlock.Text += (logBlock.Text.Length > 0 ? Environment.NewLine : "") + msg;
+                        }
+                        logScroll.ChangeView(null, logScroll.ScrollableHeight, null);
+                        AppendLog(msg);
+                    });
+                };
+
+                bool success = await inst.UninstallSoftwareAsync(selected, cleanUninstall);
+
+                if (success)
+                {
+                    var refreshed = new InstallFunctions().GetInstalledBentleySoftware().ToList();
+                    listView.ItemsSource = refreshed;
+                    software = refreshed;
+                }
+
+                listView.IsEnabled = true;
+                uninstallBtn.IsEnabled = listView.SelectedItem != null;
+            };
+
+            // Assemble layout
+            var panel = new StackPanel { Spacing = 0, MinWidth = 460 };
+            panel.Children.Add(headerGrid);
+            panel.Children.Add(listView);
+            panel.Children.Add(cleanUninstallCheck);
+            panel.Children.Add(uninstallBtn);
+            panel.Children.Add(logScroll);
 
             var dialog = new ContentDialog
             {
                 Title = "Installed Bentley Software",
-                Content = listView,
+                Content = panel,
                 CloseButtonText = "Close",
                 XamlRoot = this.XamlRoot
             };
@@ -488,7 +691,9 @@ namespace ADO_Tools_WinUI.Pages
 
         private void BtnClearLog_Click(object sender, RoutedEventArgs e)
         {
-            txtLog.Text = string.Empty;
+            _logEntries.Clear();
+            txtLogCount.Text = string.Empty;
+            HideDownloadStatus();
         }
     }
 }

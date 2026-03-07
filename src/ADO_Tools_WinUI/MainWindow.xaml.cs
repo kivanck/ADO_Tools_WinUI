@@ -17,6 +17,9 @@ namespace ADO_Tools_WinUI
             ExtendsContentIntoTitleBar = true;
             SetTitleBar(AppTitleBar);
 
+            // Set the window/taskbar icon
+            AppWindow.SetIcon("Assets/ADOToolsSquare256Pixel.ico");
+
             // Resize using DPI-aware logical size so it looks correct at any scaling
             ResizeWindowToLogicalSize(1280, 970);
 
