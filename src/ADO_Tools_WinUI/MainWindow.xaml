@@ -16,31 +16,45 @@
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
+            <RowDefinition Height="40" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Compact title bar drag region -->
-        <Grid x:Name="AppTitleBar" Grid.Row="0" Height="32"
-              Padding="12,0">
-            <TextBlock Text="ADO Tools"
-                       Style="{StaticResource CaptionTextBlockStyle}"
-                       VerticalAlignment="Center" />
-        </Grid>
+        <!-- Full-width drag region covering the entire title bar row -->
+        <Grid x:Name="AppTitleBar" Grid.Row="0" Background="Transparent" />
 
-        <!-- Tab layout keeps both pages alive simultaneously -->
-        <TabView Grid.Row="1"
-                 x:Name="MainTabView"
+        <!-- Centered app title in the title bar -->
+        <TextBlock Text="ADO Tools"
+                   Grid.Row="0"
+                   FontSize="16"
+                   FontWeight="SemiBold"
+                   Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center"
+                   IsHitTestVisible="False"
+                   Opacity="0.9"
+                   Padding="0,0,0,10"/>
+
+        <!-- TabView overlays the same row; tab strip sits in the title bar -->
+        <TabView x:Name="MainTabView"
+                 Grid.Row="0" Grid.RowSpan="2"
                  IsAddTabButtonVisible="False"
                  CanDragTabs="False"
                  CanReorderTabs="False"
-                 TabWidthMode="SizeToContent">
+                 TabWidthMode="SizeToContent"
+                 VerticalAlignment="Stretch"
+                 Padding="0">
+
+            <!-- 24px spacer to align tabs with content padding -->
+            <TabView.TabStripHeader>
+                <Grid Width="24" Background="Transparent" />
+            </TabView.TabStripHeader>
 
             <TabView.TabStripFooter>
                 <Grid HorizontalAlignment="Stretch">
                     <Button x:Name="btnSettings"
                             HorizontalAlignment="Right"
-                            Margin="0,10, 24,0"
+                            Margin="0,0,140,0"
                             VerticalAlignment="Center"
                             ToolTipService.ToolTip="Settings"
                             Click="BtnSettings_Click">
@@ -49,19 +63,32 @@
                 </Grid>
             </TabView.TabStripFooter>
 
-            <TabViewItem Header="Work Items" IsClosable="False">
-                <TabViewItem.IconSource>
-                    <SymbolIconSource Symbol="Library" />
-                </TabViewItem.IconSource>
-                <pages:WorkItemsPage />
-            </TabViewItem>
+          <TabViewItem IsClosable="False">
+            <TabViewItem.HeaderTemplate>
+              <DataTemplate>
+                <StackPanel Orientation="Horizontal" Spacing="12" Padding="8,4" MinWidth="200">
+                  <SymbolIcon Symbol="Library" />
+                  <TextBlock Text="Work Items" FontSize="16" FontWeight="SemiBold" />
+                </StackPanel>
+              </DataTemplate>
+            </TabViewItem.HeaderTemplate>
+            <pages:WorkItemsPage />
+          </TabViewItem>
 
-            <TabViewItem Header="Software Download" IsClosable="False">
-                <TabViewItem.IconSource>
-                    <SymbolIconSource Symbol="Download" />
-                </TabViewItem.IconSource>
-                <pages:SoftwareDownloadPage />
-            </TabViewItem>
+
+          <TabViewItem IsClosable="False">
+            <TabViewItem.HeaderTemplate>
+              <DataTemplate>
+                <StackPanel Orientation="Horizontal" Spacing="12" Padding="8,4" MinWidth="200">
+                  <SymbolIcon Symbol="Download" />
+                  <TextBlock Text="Software Downloads" FontSize="16" FontWeight="SemiBold" />
+                </StackPanel>
+              </DataTemplate>
+            </TabViewItem.HeaderTemplate>
+            <pages:SoftwareDownloadPage />
+          </TabViewItem>
+
+            
 
         </TabView>
     </Grid>

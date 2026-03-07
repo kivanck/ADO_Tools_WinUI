@@ -272,7 +272,7 @@
                                     <ColumnDefinition Width="130" />
                                     <ColumnDefinition Width="90" />
                                     <ColumnDefinition Width="100" />
-                                    <ColumnDefinition Width="180" />
+                                    <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="ID" FontWeight="SemiBold" />
                                 <TextBlock Grid.Column="1" Text="Title" FontWeight="SemiBold" />
@@ -294,7 +294,7 @@
                                     <ColumnDefinition Width="130" />
                                     <ColumnDefinition Width="90" />
                                     <ColumnDefinition Width="100" />
-                                    <ColumnDefinition Width="180" />
+                                    <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{Binding Id}" />
                                 <TextBlock Grid.Column="1" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
