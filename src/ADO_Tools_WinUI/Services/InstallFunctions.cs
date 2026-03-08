@@ -8,6 +8,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 using Microsoft.UI.Xaml;
@@ -126,64 +127,6 @@ namespace ADO_Tools.Services
             return result.OrderBy(s => s.DisplayName ?? string.Empty).ToList();
         }
 
-        // Updated method signature to include productName and cleanUninstall parameters
-        //public async Task UpdateSoftwareAsync(TFSFunctions.BuildInfo selectedBuildInfo, InstalledSoftwareInfo matchingInstalledBuild, string zipPath, string extractPath, string setupFileName, string productName, bool cleanUninstall)
-        //{
-
-        //    if (matchingInstalledBuild)
-        //    {
-        //        UpdateStatus($"No matching installed version found for {matchingInstalledBuild.MajorVersion}.");
-        //        return;
-        //    }
-        //    string uninstallString = matchingInstalledBuild.QuietUninstallString;
-
-        //    string version = matchingInstalledBuild.DisplayVersion; //"26.0.0.68"
-            
-        //    //if (version == null)
-        //    //{
-        //    //    UpdateStatus("Version could not be extracted from setup file name.");
-        //    //    return;
-        //    //}
-
-        //    string majorMinorBuild = string.Join(".", version.Split('.').Take(3)); //"26.0.0"
-
-        //    UpdateStatus($"Searching for installed version {majorMinorBuild}.* ...");
-
-        //    //Test
-        //    //CleanUninstallBentleyProduct(matchingInstalledBuild);
-
-        //    bool uninstallOk = await UninstallSoftwareAsync(matchingInstalledBuild.QuietUninstallString);
-            
-        //    if(!uninstallOk)
-        //    {
-        //        UpdateStatus("Uninstall failed or was cancelled. Update process aborted!");
-        //        return;
-        //    }
-
-
-        //    //If uninstall was successful and user wants clean uninstall, then proceed to clean uninstall
-        //    if (uninstallOk && cleanUninstall)
-        //    {
-        //        // Use the same productName and version you already have
-        //        CleanUninstallBentleyProduct(matchingInstalledBuild);
-        //    }
-
-
-        //    string setupPath = Path.Combine(extractPath, setupFileName);
-        //    if (File.Exists(setupPath))
-        //    {
-        //        UpdateStatus("Installing new version...");
-        //        await InstallSoftwareAsync(setupPath);
-        //    }
-        //    else
-        //    {
-        //        UpdateStatus("Setup file not found after extraction.");
-        //    }
-
-
-
-        //    UpdateStatus("Update process completed.");
-        //}
 
 
         public async Task UninstallMatchingSoftwareAsync(InstalledSoftwareInfo matchingInstalledBuild, string productName, bool cleanUninstall)
@@ -358,15 +301,22 @@ namespace ADO_Tools.Services
             {
                 UpdateStatus("Clean Uninstall: No matching installed version found for clean uninstall.");
                 return;
-            }else
+            }
+
+            // Safety check: verify the software is actually uninstalled before deleting folders
+            var stillInstalled = GetInstalledBentleySoftware()
+                .Any(s => s.DisplayName == matchingInstalledBuild.DisplayName
+                        && s.DisplayVersion == matchingInstalledBuild.DisplayVersion);
+
+            if (stillInstalled)
             {
-                UpdateStatus($"Clean Uninstall started. Recycling remaing folders for {matchingInstalledBuild.DisplayName}...");
-            }   
+                UpdateStatus($"Clean Uninstall aborted: {matchingInstalledBuild.DisplayName} is still installed.");
+                return;
+            }
+
+            UpdateStatus($"Clean Uninstall started. Recycling remaining folders for {matchingInstalledBuild.DisplayName}...");
 
             string userName = Environment.UserName;
-
-            // Build folder patterns based on product and version
-            var folders = new List<string>();
 
             var DisplayName = matchingInstalledBuild.DisplayName; //"OpenRail Designer 2025"
             string normalizedProductName = Regex.Replace(DisplayName, @"[\d\s]", ""); //"OpenRailDesigner"
@@ -378,20 +328,27 @@ namespace ADO_Tools.Services
             var MinorRelease = matchingInstalledBuild.MinorRelease;
             var MinorVersionIteration = matchingInstalledBuild.MinorVersionIteration;
 
-               
+            // Folder patterns (directory, searchPattern) to match and delete
+            var folderPatterns = new List<(string Directory, string SearchPattern)>
+            {
+                (@"C:\Program Files\Bentley", $"*{DisplayName}*"),
+                (@"C:\ProgramData\Bentley", $"*{DisplayName}*{MajorVersionSequence}*"),
+                ($@"C:\Users\{userName}\AppData\Local\Bentley\{normalizedProductName}", $"*{MajorVersion}*"),
+                ($@"C:\Users\{userName}\AppData\Local\Temp\Bentley\{normalizedProductName}", $"*{MajorVersion}*"),
+                ($@"C:\Users\{userName}\AppData\Roaming\Bentley", $"*{normalizedProductName}*"),
+            };
 
-            // Example for OpenRoads, OpenRail, Overhead Line, etc.
-            folders.Add($@"C:\Program Files\Bentley\*{DisplayName}*");
-            folders.Add($@"C:\ProgramData\Bentley\*{DisplayName}*{MajorVersionSequence}*");
-            folders.Add($@"C:\Users\{userName}\AppData\Local\Bentley\{normalizedProductName}\*{MajorVersion}*");
-            folders.Add($@"C:\Users\{userName}\AppData\Local\Temp\Bentley\{normalizedProductName}\*{MajorVersion}*");
-            folders.Add($@"C:\Users\{userName}\AppData\Roaming\Bentley\*{normalizedProductName}*");
-
-            foreach (var pattern in folders)
+            foreach (var (directory, searchPattern) in folderPatterns)
             {
                 try
                 {
-                    var matches = Directory.GetDirectories(Path.GetDirectoryName(pattern), Path.GetFileName(pattern));
+                    if (!Directory.Exists(directory))
+                    {
+                        UpdateStatus($"Skipped (directory not found): {directory}");
+                        continue;
+                    }
+
+                    var matches = Directory.GetDirectories(directory, searchPattern);
                     foreach (var folder in matches)
                     {
                         try
@@ -680,16 +637,30 @@ namespace ADO_Tools.Services
 
         public static bool IsInstallerRunning()
         {
-            // Checks if msiexec.exe is running
-            return Process.GetProcessesByName("msiexec").Length > 1;
+            // The Windows Installer holds the "Global\_MSIExecute" mutex
+            // while any MSI installation is in progress.
+            try
+            {
+                using var mutex = Mutex.OpenExisting(@"Global\_MSIExecute");
+                // If we reach here, the mutex exists — an install is running.
+                return true;
+            }
+            catch (WaitHandleCannotBeOpenedException)
+            {
+                // Mutex does not exist — no MSI install is running.
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // Mutex exists but we can't open it — an install is running.
+                return true;
+            }
         }
       
     }
 
 
 }
-
-
 
 
 

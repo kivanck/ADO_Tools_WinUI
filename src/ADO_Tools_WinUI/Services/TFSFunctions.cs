@@ -14,6 +14,8 @@ namespace ADO_Tools.Services
     public class TFSFunctions
     {
         public event Action<string> StatusUpdated;
+        public event Action<double> ProgressUpdated;
+
         public void UpdateStatus(string message)
         {
             StatusUpdated?.Invoke(message);
@@ -220,6 +222,8 @@ namespace ADO_Tools.Services
                         long nextLogPoint = logThreshold;
 
                         DateTime lastLogTime = DateTime.UtcNow;
+                        double lastReportedPercentage = -1; // Keep track of the last percentage we spammed to the UI
+
                         using (var stream = await response.Content.ReadAsStreamAsync())
                         using (var fs = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None))
                         {
@@ -229,6 +233,18 @@ namespace ADO_Tools.Services
                             {
                                 await fs.WriteAsync(buffer, 0, bytesRead);
                                 downloadedBytes += bytesRead;
+
+                                //if (remoteSize.HasValue && remoteSize.Value > 0)
+                                //{
+                                //    double percentage = ((double)downloadedBytes / remoteSize.Value) * 100;
+                                //    // Throttle the progress updates to the UI to max ~1000 updates rather than millions
+                                //    // Only invoke if percentage grew by at least 0.1%
+                                //    if (percentage - lastReportedPercentage >= 0.1 || downloadedBytes == remoteSize.Value)
+                                //    {
+                                //        ProgressUpdated?.Invoke(percentage);
+                                //        lastReportedPercentage = percentage;
+                                //    }
+                                //}
 
                                 // Log progress every 10 MB
                                 if (downloadedBytes >= nextLogPoint)
@@ -240,8 +256,14 @@ namespace ADO_Tools.Services
                                     double downloadedMB = downloadedBytes / (1024.0 * 1024.0);
                                     double speedMBps = logThreshold / (1024.0 * 1024.0) / elapsedSeconds;
 
+                                    double percentage = ((double)downloadedBytes / remoteSize.Value) * 100;
+                                    ProgressUpdated?.Invoke(percentage);
+
+
+
                                     UpdateStatus($"Downloaded: {downloadedMB:F2} MB of ~{remoteSizeMB} at {speedMBps:F2} MB/s");
                                     nextLogPoint += logThreshold;
+
                                 }
                             }
                         }

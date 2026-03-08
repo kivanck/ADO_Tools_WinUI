@@ -19,9 +19,7 @@ namespace ADO_Tools_WinUI.Pages
         private List<TFSFunctions.BuildInfo> _builds = new();
         private readonly ObservableCollection<LogEntryViewModel> _logEntries = new();
 
-        private static readonly Regex ProgressRegex = new(
-            @"Downloaded:\s*(?<current>[\d.]+)\s*MB\s*of\s*~?(?<total>[\d.]+)\s*MB\s*at\s*(?<speed>[\d.]+)\s*MB/s",
-            RegexOptions.Compiled | RegexOptions.IgnoreCase);
+       
 
         public SoftwareDownloadPage()
         {
@@ -148,6 +146,8 @@ namespace ADO_Tools_WinUI.Pages
                 await dialog.ShowAsync();
             };
 
+            tfs.ProgressUpdated += Tfs_ProgressUpdated;
+
             return tfs;
         }
 
@@ -184,19 +184,17 @@ namespace ADO_Tools_WinUI.Pages
 
         private void UpdateDownloadStatus(string message)
         {
-            var match = ProgressRegex.Match(message);
-            if (!match.Success) return;
+            // Message format: "Downloaded: 12.34 MB of ~1,234.00 MB at 1.25 MB/s"
+            
+            // Extract the relevant text parts using simple string manipulation (if desired)
+            // Or just set the whole string text somewhere if needed.
+            
+            // For example, if you just want to grab the speed from the end of the string:
+            var speedPart = message.Substring(message.LastIndexOf(" at ") + 4);
+            txtDownloadSpeed.Text = speedPart;
 
-            double current = double.Parse(match.Groups["current"].Value);
-            double total = double.Parse(match.Groups["total"].Value);
-            double speed = double.Parse(match.Groups["speed"].Value);
-
-            downloadStatusPanel.Visibility = Visibility.Visible;
-            downloadProgressBar.Maximum = total;
-            downloadProgressBar.Value = current;
-
-            txtDownloadStatus.Text = $"{current:F0} / {total:F0} MB";
-            txtDownloadSpeed.Text = $"{speed:F1} MB/s";
+            var statsPart = message.Replace("Downloaded: ", "").Substring(0, message.IndexOf(" at ") - "Downloaded: ".Length + 1);
+            txtDownloadStatus.Text = statsPart;
         }
 
         private void HideDownloadStatus()
@@ -406,6 +404,7 @@ namespace ADO_Tools_WinUI.Pages
             string project = txtProject.Text.Trim();
             var settings = AppSettings.Default;
 
+            // Download and extract the build artifacts
             await tfsFunctions.DownloadLatestBuildArtifacts(
                 settings.Organization, project, selectedBuildInfo.BuildId,
                 downloadFolder, extractFolder,
@@ -540,16 +539,14 @@ namespace ADO_Tools_WinUI.Pages
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column=""0""
                                    Text=""{Binding DisplayName}""
-                                   FontFamily=""Cascadia Code, Consolas""
-                                   FontSize=""11""
-                                   TextTrimming=""CharacterEllipsis""
+                                   Style=""{StaticResource BodyTextBlockStyle}""
+                                   TextWrapping=""Wrap""
                                    VerticalAlignment=""Center"" />
                         <TextBlock Grid.Column=""1""
                                    Text=""{Binding DisplayVersion}""
-                                   FontFamily=""Cascadia Code, Consolas""
-                                   FontSize=""11""
+                                   Style=""{StaticResource BodyTextBlockStyle}""
                                    Foreground=""DodgerBlue""
-                                   TextTrimming=""CharacterEllipsis""
+                                   TextWrapping=""Wrap""
                                    VerticalAlignment=""Center"" />
                     </Grid>
                 </DataTemplate>";
@@ -694,6 +691,28 @@ namespace ADO_Tools_WinUI.Pages
             _logEntries.Clear();
             txtLogCount.Text = string.Empty;
             HideDownloadStatus();
+        }
+
+        private void Tfs_ProgressUpdated(double percentage)
+        {
+            // Ensure we update the UI on the main thread
+            DispatcherQueue.TryEnqueue(() =>
+            {
+
+                // -- Progress Bar Logic --
+                if (downloadStatusPanel.Visibility == Visibility.Collapsed)
+                {
+                    downloadStatusPanel.Visibility = Visibility.Visible;
+                    downloadProgressBar.Maximum = 100; // Since we are passing percentage (0-100)
+                }
+                downloadProgressBar.Value = percentage;
+
+                // Optionally hide them when it reaches 100%
+                if (percentage >= 100)
+                {
+                    
+                }
+            });
         }
     }
 }
