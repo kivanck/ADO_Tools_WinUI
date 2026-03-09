@@ -113,7 +113,20 @@ namespace ADO_Tools_WinUI.Pages
         {
             var inst = new InstallFunctions();
             inst.StatusUpdated += AppendLog;
+            inst.InstallerRunningChanged += OnInstallerRunningChanged;
             return inst;
+        }
+
+        private void OnInstallerRunningChanged(bool isRunning, int elapsedSeconds)
+        {
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                installerInfoBar.IsOpen = isRunning;
+                if (isRunning)
+                {
+                    txtInstallerElapsed.Text = $"Elapsed: {elapsedSeconds}s";
+                }
+            });
         }
 
         private TFSFunctions CreateTFSFunctionsWithLogging()
@@ -184,16 +197,19 @@ namespace ADO_Tools_WinUI.Pages
 
         private void UpdateDownloadStatus(string message)
         {
-            // Message format: "Downloaded: 12.34 MB of ~1,234.00 MB at 1.25 MB/s"
-            
-            // Extract the relevant text parts using simple string manipulation (if desired)
-            // Or just set the whole string text somewhere if needed.
-            
-            // For example, if you just want to grab the speed from the end of the string:
+            if (message.StartsWith("Windows Installer is running", StringComparison.OrdinalIgnoreCase))
+            {
+                txtDownloadSpeed.Text = "";
+                txtDownloadStatus.Text = message;
+                return;
+            }
+
+            // Existing "Downloaded:" parsing logic
             var speedPart = message.Substring(message.LastIndexOf(" at ") + 4);
             txtDownloadSpeed.Text = speedPart;
 
-            var statsPart = message.Replace("Downloaded: ", "").Substring(0, message.IndexOf(" at ") - "Downloaded: ".Length + 1);
+            var atIndex = message.IndexOf(" at ");
+            var statsPart = message.Replace("Downloaded: ", "").Substring(0, atIndex - "Downloaded: ".Length + 1);
             txtDownloadStatus.Text = statsPart;
         }
 

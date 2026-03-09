@@ -55,6 +55,9 @@ namespace ADO_Tools.Services
             lastInstallerRunning = false;
         }
 
+        // New event for installer running state changes
+        public event Action<bool, int> InstallerRunningChanged;
+
         private void InstallerCheckTimer_Tick(object sender, object e)
         {
             bool installerRunning = IsInstallerRunning();
@@ -62,16 +65,19 @@ namespace ADO_Tools.Services
             if (installerRunning)
             {
                 installerProgressTicks++;
-                if (installerProgressTicks > maxAsterisks) installerProgressTicks = 1;
 
-                string progressLine = "Windows Installer is running. Please wait..." + new string('*', installerProgressTicks);
+                // Update the log entry in-place (single line, no spam)
+                string progressLine = $"Windows Installer is running. Please wait… ({installerProgressTicks * 5}s elapsed)";
                 StatusUpdated?.Invoke(progressLine);
+
+                // Notify UI to show/update the InfoBar
+                InstallerRunningChanged?.Invoke(true, installerProgressTicks * 5);
             }
             else if (lastInstallerRunning)
             {
-                // Only stop the timer and reset when installer just finished
                 StopInstallerTimer();
                 StatusUpdated?.Invoke("Windows Installer finished.");
+                InstallerRunningChanged?.Invoke(false, 0);
             }
 
             lastInstallerRunning = installerRunning;
@@ -661,6 +667,20 @@ namespace ADO_Tools.Services
 
 
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

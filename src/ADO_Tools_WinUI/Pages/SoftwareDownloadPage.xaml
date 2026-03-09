@@ -420,6 +420,7 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
                     <!--  Log header  -->
@@ -498,17 +499,37 @@
                             </DataTemplate>
                         </ListView.ItemTemplate>
                     </ListView>
+
+                    <!--  Installer status banner  -->
+                    <InfoBar
+                        x:Name="installerInfoBar"
+                        Grid.Row="2"
+                        IsClosable="False"
+                        IsOpen="False"
+                        Severity="Informational">
+                        <InfoBar.Content>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock
+                                    VerticalAlignment="Center"
+                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                    Text="Windows Installer is running…" />
+                                <TextBlock
+                                    x:Name="txtInstallerElapsed"
+                                    VerticalAlignment="Center"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                    Text="Elapsed: 0s" />
+                            </StackPanel>
+                        </InfoBar.Content>
+                    </InfoBar>
+
                     <ProgressBar
                         x:Name="progressBar"
-                        Grid.Row="2"
+                        Grid.Row="3"
                         IsIndeterminate="False"
                         Visibility="Collapsed" />
-
                 </Grid>
             </Border>
-
-
-
         </Grid>
     </Grid>
 </Page>

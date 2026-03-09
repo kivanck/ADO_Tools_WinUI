@@ -37,7 +37,8 @@ namespace ADO_Tools_WinUI.Pages
             => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
         public static bool IsProgressMessage(string message)
-            => message.StartsWith("Downloaded:", System.StringComparison.OrdinalIgnoreCase);
+            => message.StartsWith("Downloaded:", System.StringComparison.OrdinalIgnoreCase)
+            || message.StartsWith("Windows Installer is running", System.StringComparison.OrdinalIgnoreCase);
 
         public static (string glyph, SolidColorBrush brush) ClassifyMessage(string message)
         {
