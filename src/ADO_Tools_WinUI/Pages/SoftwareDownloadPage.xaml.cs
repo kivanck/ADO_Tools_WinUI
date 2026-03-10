@@ -13,14 +13,25 @@ using Windows.Storage.Pickers;
 
 namespace ADO_Tools_WinUI.Pages
 {
+    /// <summary>
+    /// Page that allows users to browse, download, and install Bentley software builds
+    /// from Azure DevOps. Provides build filtering, download progress tracking,
+    /// and integrated install/uninstall capabilities.
+    /// </summary>
     public sealed partial class SoftwareDownloadPage : Page
     {
+        // View-models for every build returned by the last query (unfiltered)
         private List<BuildInfoViewModel> _allBuildViewModels = new();
+
+        // Raw build info objects from Azure DevOps (used to retrieve artifact details)
         private List<TFSFunctions.BuildInfo> _builds = new();
+
+        // Observable log entries displayed in the log ListView at the bottom of the page
         private readonly ObservableCollection<LogEntryViewModel> _logEntries = new();
 
        
 
+        /// <summary>Initializes the page, binds the log list, and subscribes to the Loaded event.</summary>
         public SoftwareDownloadPage()
         {
             InitializeComponent();
@@ -28,6 +39,10 @@ namespace ADO_Tools_WinUI.Pages
             Loaded += SoftwareDownloadPage_Loaded;
         }
 
+        /// <summary>
+        /// Restores persisted settings (download folder, definition ID, project, build count)
+        /// into the UI controls and pre-selects the last-used product.
+        /// </summary>
         private void SoftwareDownloadPage_Loaded(object sender, RoutedEventArgs e)
         {
             var settings = AppSettings.Default;
@@ -53,6 +68,11 @@ namespace ADO_Tools_WinUI.Pages
 
         // ── Helpers ──────────────────────────────────────────────────────
 
+        /// <summary>
+        /// Built-in product definitions shipped with the app.
+        /// Format: "ProductName|DefinitionId|AzDevOpsProject"
+        /// These are automatically added to the user's list if missing.
+        /// </summary>
         private static readonly string[] DefaultDefinitions =
         {
             "OpenRail Designer|6098|civil",
@@ -61,6 +81,10 @@ namespace ADO_Tools_WinUI.Pages
             "Microstation|5311|PowerPlatform"
         };
 
+        /// <summary>
+        /// Ensures the built-in default product definitions exist in the user's saved list.
+        /// Missing entries are appended and the settings are persisted.
+        /// </summary>
         private static void EnsureDefaultDefinitions()
         {
             var list = AppSettings.Default.UserDefinitionList;
@@ -72,6 +96,10 @@ namespace ADO_Tools_WinUI.Pages
             AppSettings.Default.Save();
         }
 
+        /// <summary>
+        /// Rebuilds the product name combo box from the user's definition list.
+        /// Duplicates are filtered out using a HashSet.
+        /// </summary>
         private void PopulateProductCombo()
         {
             cmbProductName.Items.Clear();
@@ -84,6 +112,10 @@ namespace ADO_Tools_WinUI.Pages
             }
         }
 
+        /// <summary>
+        /// Saves the current UI control values (product, definition ID, project, folder, count)
+        /// to persistent application settings so they survive restarts.
+        /// </summary>
         private void PersistCurrentSettings()
         {
             var s = AppSettings.Default;
@@ -95,6 +127,10 @@ namespace ADO_Tools_WinUI.Pages
             s.Save();
         }
 
+        /// <summary>
+        /// Updates the definition ID and project for the currently selected product
+        /// in the user's saved definition list (in case the user edited them manually).
+        /// </summary>
         private void UpdateCurrentDefinitionInUserList()
         {
             var productName = (cmbProductName.SelectedItem as ComboBoxItem)?.Content as string;
@@ -109,6 +145,10 @@ namespace ADO_Tools_WinUI.Pages
             }
         }
 
+        /// <summary>
+        /// Creates an <see cref="InstallFunctions"/> instance wired up to the page's
+        /// log output and installer info-bar so all status messages appear in the UI.
+        /// </summary>
         private InstallFunctions CreateInstallFunctionsWithLogging()
         {
             var inst = new InstallFunctions();
@@ -117,23 +157,33 @@ namespace ADO_Tools_WinUI.Pages
             return inst;
         }
 
-        private void OnInstallerRunningChanged(bool isRunning, int elapsedSeconds)
+        /// <summary>
+        /// Callback for <see cref="InstallFunctions.InstallerRunningChanged"/>.
+        /// Shows or hides the installer info bar and updates the elapsed time display.
+        /// </summary>
+        private void OnInstallerRunningChanged(bool isRunning, int elapsedSeconds, string operationLabel)
         {
             DispatcherQueue.TryEnqueue(() =>
             {
                 installerInfoBar.IsOpen = isRunning;
                 if (isRunning)
                 {
+                    txtInstallerLabel.Text = $"{operationLabel} is running…";
                     txtInstallerElapsed.Text = $"Elapsed: {elapsedSeconds}s";
                 }
             });
         }
 
+        /// <summary>
+        /// Creates a <see cref="TFSFunctions"/> instance wired to the page's logging,
+        /// confirmation dialogs, message dialogs, and download progress bar.
+        /// </summary>
         private TFSFunctions CreateTFSFunctionsWithLogging()
         {
             var tfs = new TFSFunctions();
             tfs.StatusUpdated += AppendLog;
 
+            // Wire up the confirmation dialog so TFSFunctions can ask the user Yes/No questions
             tfs.ConfirmAsync = async (message, title) =>
             {
                 var dialog = new ContentDialog
@@ -147,6 +197,7 @@ namespace ADO_Tools_WinUI.Pages
                 return await dialog.ShowAsync() == ContentDialogResult.Primary;
             };
 
+            // Wire up the informational message dialog
             tfs.ShowMessageAsync = async (message, title) =>
             {
                 var dialog = new ContentDialog
@@ -164,12 +215,19 @@ namespace ADO_Tools_WinUI.Pages
             return tfs;
         }
 
+        /// <summary>
+        /// Appends a log message to the on-screen log list.
+        /// Progress-style messages (e.g. download percentages) update the last entry in-place
+        /// to avoid flooding the list with rapidly changing lines.
+        /// Also drives the download status panel visibility.
+        /// </summary>
         private void AppendLog(string message)
         {
             DispatcherQueue.TryEnqueue(() =>
             {
                 bool isProgress = LogEntryViewModel.IsProgressMessage(message);
 
+                // Show the download status bar for progress messages; hide it otherwise
                 if (isProgress)
                 {
                     UpdateDownloadStatus(message);
@@ -190,13 +248,20 @@ namespace ADO_Tools_WinUI.Pages
                 _logEntries.Add(entry);
                 txtLogCount.Text = $"({_logEntries.Count})";
 
+                // Auto-scroll to the newest log entry
                 if (_logEntries.Count > 0)
                     lvLog.ScrollIntoView(_logEntries[^1]);
             });
         }
 
+        /// <summary>
+        /// Parses a download progress message and updates the status panel text blocks.
+        /// Expected format: "Downloaded: 45.2 MB / 120.0 MB at 5.3 MB/s"
+        /// Also handles "Windows Installer is running…" messages as a special case.
+        /// </summary>
         private void UpdateDownloadStatus(string message)
         {
+            // Installer progress messages don't follow the "Downloaded:" format
             if (message.StartsWith("Windows Installer is running", StringComparison.OrdinalIgnoreCase))
             {
                 txtDownloadSpeed.Text = "";
@@ -204,15 +269,17 @@ namespace ADO_Tools_WinUI.Pages
                 return;
             }
 
-            // Existing "Downloaded:" parsing logic
+            // Extract the speed portion after the last " at " (e.g. "5.3 MB/s")
             var speedPart = message.Substring(message.LastIndexOf(" at ") + 4);
             txtDownloadSpeed.Text = speedPart;
 
+            // Extract the size/progress portion between "Downloaded: " and " at "
             var atIndex = message.IndexOf(" at ");
             var statsPart = message.Replace("Downloaded: ", "").Substring(0, atIndex - "Downloaded: ".Length + 1);
             txtDownloadStatus.Text = statsPart;
         }
 
+        /// <summary>Collapses the download status panel and resets all progress indicators.</summary>
         private void HideDownloadStatus()
         {
             downloadStatusPanel.Visibility = Visibility.Collapsed;
@@ -221,6 +288,7 @@ namespace ADO_Tools_WinUI.Pages
             txtDownloadSpeed.Text = "";
         }
 
+        /// <summary>Displays a simple informational dialog with an OK button.</summary>
         private async void ShowMessage(string message, string title = "")
         {
             var dialog = new ContentDialog
@@ -235,11 +303,16 @@ namespace ADO_Tools_WinUI.Pages
 
         // ── Event Handlers ───────────────────────────────────────────────
 
+        /// <summary>
+        /// When the user picks a different product from the combo box, loads the
+        /// corresponding definition ID and project into the text fields and saves settings.
+        /// </summary>
         private void CmbProductName_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (cmbProductName.SelectedItem is not ComboBoxItem item) return;
             var selected = (string)item.Content;
 
+            // Look up the definition entry for the selected product name
             var def = AppSettings.Default.UserDefinitionList
                 .FirstOrDefault(d => d.StartsWith(selected + "|"));
             if (def != null)
@@ -251,6 +324,10 @@ namespace ADO_Tools_WinUI.Pages
             PersistCurrentSettings();
         }
 
+        /// <summary>
+        /// Opens a dialog that lets the user add a new product definition (name, definition ID, project)
+        /// to the saved list and refreshes the combo box.
+        /// </summary>
         private async void BtnAddDefinition_Click(object sender, RoutedEventArgs e)
         {
             var nameBox = new TextBox { Header = "Product Name", PlaceholderText = "e.g. OpenRail Designer" };
@@ -293,6 +370,10 @@ namespace ADO_Tools_WinUI.Pages
             }
         }
 
+        /// <summary>
+        /// Removes the currently selected product definition from the saved list
+        /// and refreshes the combo box, selecting the first remaining item.
+        /// </summary>
         private void BtnRemoveDefinition_Click(object sender, RoutedEventArgs e)
         {
             if (cmbProductName.SelectedItem is not ComboBoxItem item) return;
@@ -316,6 +397,11 @@ namespace ADO_Tools_WinUI.Pages
             }
         }
 
+        /// <summary>
+        /// Validates inputs, then queries Azure DevOps for available builds matching
+        /// the selected product definition. Populates the build list and applies
+        /// the latest-major-version highlight.
+        /// </summary>
         private async void BtnLoadBuilds_Click(object sender, RoutedEventArgs e)
         {
             var settings = AppSettings.Default;
@@ -382,6 +468,14 @@ namespace ADO_Tools_WinUI.Pages
             PersistCurrentSettings();
         }
 
+        /// <summary>
+        /// Main "Update" workflow:
+        /// 1. Downloads build artifacts from Azure DevOps.
+        /// 2. Extracts the ZIP contents.
+        /// 3. Optionally uninstalls the currently installed version (with clean uninstall).
+        /// 4. Runs the setup executable in quiet mode.
+        /// If "Download Only" is toggled on, steps 3-4 are skipped.
+        /// </summary>
         private async void BtnUpdate_Click(object sender, RoutedEventArgs e)
         {
             if (lvBuilds.SelectedItem is not BuildInfoViewModel selectedVm || string.IsNullOrWhiteSpace(txtDownloadFolder.Text))
@@ -436,10 +530,12 @@ namespace ADO_Tools_WinUI.Pages
                 return;
             }
 
+            // Locate the setup executable among the extracted files
+            // (must contain both "setup" and the product name in its filename)
             string productName = selectedBuildInfo.ProductName;
             string setupFile = Directory.GetFiles(extractFolder, "*.exe", SearchOption.AllDirectories)
                 .FirstOrDefault(f => Path.GetFileName(f).ToLower().Contains("setup") &&
-                                     Path.GetFileName(f).ToLower().Contains(productName.ToLower()));
+                                      Path.GetFileName(f).ToLower().Contains(productName.ToLower()));
 
             if (setupFile == null)
             {
@@ -455,6 +551,7 @@ namespace ADO_Tools_WinUI.Pages
             installFunctions.UpdateStatus(
                 $"Searching for installed version {selectedBuildInfo.MajorVersion}.{selectedBuildInfo.MajorVersionSequence}.* ...");
 
+            // Find a currently installed build whose product name and major version match the selected build
             var matchingInstalled = bentleySoftware.FirstOrDefault(installed =>
                 installed.DisplayName.Replace(" ", "").StartsWith(selectedBuildInfo.ProductName, StringComparison.OrdinalIgnoreCase) &&
                 installed.MajorVersion == selectedBuildInfo.MajorVersion &&
@@ -494,6 +591,10 @@ namespace ADO_Tools_WinUI.Pages
             PersistCurrentSettings();
         }
 
+        /// <summary>
+        /// Opens a folder picker so the user can choose where build artifacts are downloaded.
+        /// Persists the selected path to settings.
+        /// </summary>
         private async void BtnBrowseDownloadFolder_Click(object sender, RoutedEventArgs e)
         {
             var picker = new FolderPicker();
@@ -512,6 +613,11 @@ namespace ADO_Tools_WinUI.Pages
             }
         }
 
+        /// <summary>
+        /// Shows a dialog listing all Bentley software installed on the machine.
+        /// The user can select an entry and uninstall it (optionally with clean uninstall)
+        /// directly from the dialog.
+        /// </summary>
         private async void BtnShowBentleySoftware_Click(object sender, RoutedEventArgs e)
         {
             var software = new InstallFunctions().GetInstalledBentleySoftware().ToList();
@@ -522,7 +628,7 @@ namespace ADO_Tools_WinUI.Pages
                 return;
             }
 
-            // Column headers
+            // Build the dialog UI programmatically: header row, list, uninstall controls, and log
             var headerGrid = new Grid { Padding = new Thickness(12, 8, 12, 8) };
             headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
             headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -636,11 +742,12 @@ namespace ADO_Tools_WinUI.Pages
                 {
                     DispatcherQueue.TryEnqueue(() =>
                     {
-                        if (msg.StartsWith("Windows Installer is running.", StringComparison.OrdinalIgnoreCase)
-                            && logBlock.Text.Contains("Windows Installer is running."))
+                        if ((msg.StartsWith("Windows Installer is running.", StringComparison.OrdinalIgnoreCase)
+                            && logBlock.Text.Contains("Windows Uninstaller is running.")))
+                            
                         {
                             var lines = logBlock.Text.Split(Environment.NewLine).ToList();
-                            int idx = lines.FindLastIndex(l => l.StartsWith("Windows Installer is running."));
+                            int idx = lines.FindLastIndex(l => l.StartsWith("Windows Installer is running.")|| l.StartsWith("Windows Uninstaller is running."));
                             if (idx >= 0)
                                 lines[idx] = msg;
                             logBlock.Text = string.Join(Environment.NewLine, lines);
@@ -685,6 +792,10 @@ namespace ADO_Tools_WinUI.Pages
             await dialog.ShowAsync();
         }
 
+        /// <summary>
+        /// Filters the build list in real time as the user types into the search box.
+        /// Matches against product name, version, result status, and finish time.
+        /// </summary>
         private void BuildFilterBox_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
         {
             var filter = sender.Text?.Trim();
@@ -702,6 +813,7 @@ namespace ADO_Tools_WinUI.Pages
                 .ToList();
         }
 
+        /// <summary>Clears all log entries and resets the download status panel.</summary>
         private void BtnClearLog_Click(object sender, RoutedEventArgs e)
         {
             _logEntries.Clear();
@@ -709,21 +821,24 @@ namespace ADO_Tools_WinUI.Pages
             HideDownloadStatus();
         }
 
+        /// <summary>
+        /// Callback for <see cref="TFSFunctions.ProgressUpdated"/>.
+        /// Updates the download progress bar on the UI thread.
+        /// Shows the status panel when a download starts, and updates the bar value (0–100%).
+        /// </summary>
         private void Tfs_ProgressUpdated(double percentage)
         {
-            // Ensure we update the UI on the main thread
             DispatcherQueue.TryEnqueue(() =>
             {
-
-                // -- Progress Bar Logic --
+                // Make the status panel visible on the first progress update
                 if (downloadStatusPanel.Visibility == Visibility.Collapsed)
                 {
                     downloadStatusPanel.Visibility = Visibility.Visible;
-                    downloadProgressBar.Maximum = 100; // Since we are passing percentage (0-100)
+                    downloadProgressBar.Maximum = 100;
                 }
                 downloadProgressBar.Value = percentage;
 
-                // Optionally hide them when it reaches 100%
+                // Placeholder: could hide/reset the panel when download reaches 100%
                 if (percentage >= 100)
                 {
                     

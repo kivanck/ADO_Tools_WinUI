@@ -510,6 +510,7 @@
                         <InfoBar.Content>
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <TextBlock
+                                    x:Name="txtInstallerLabel"
                                     VerticalAlignment="Center"
                                     Style="{StaticResource CaptionTextBlockStyle}"
                                     Text="Windows Installer is running…" />

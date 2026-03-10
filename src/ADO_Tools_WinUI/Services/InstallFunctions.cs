@@ -1,5 +1,4 @@
-﻿using Microsoft.VisualBasic.FileIO;
-using Microsoft.Win32;
+﻿using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -10,44 +9,64 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 using Microsoft.UI.Xaml;
-//using static System.Runtime.InteropServices.JavaScript.JSType;
-//using System.Windows.Forms;
-//using Timer = System.Windows.Forms.Timer;
+using Microsoft.VisualBasic.FileIO;
 
 namespace ADO_Tools.Services
 {
-  
-
-
+    /// <summary>
+    /// Provides functionality for installing, uninstalling, and managing Bentley software products.
+    /// Handles MSI-based installer operations, registry queries for installed software,
+    /// ZIP extraction, and clean uninstall with leftover file/folder cleanup.
+    /// </summary>
     public class InstallFunctions
     {
+        // Timer that periodically checks whether the Windows Installer (msiexec) is still running
         private DispatcherTimer installerCheckTimer;
+
+        // Counts how many 5-second intervals have passed since the installer started
         private int installerProgressTicks = 0;
-        private int maxAsterisks = 10;
+
+        // Tracks the previous tick's installer state to detect when the installer finishes
         private bool lastInstallerRunning = false;
 
-        // Event for status updates (already present)
+        // Label describing the current operation (e.g. "Windows Installer" or "Windows Uninstaller")
+        private string currentOperationLabel = "Windows Installer";
+
+        /// <summary>Raised whenever a status message should be displayed to the user (log line).</summary>
         public event Action<string> StatusUpdated;
+
+        /// <summary>Convenience method to raise <see cref="StatusUpdated"/> with the given message.</summary>
         public void UpdateStatus(string message)
         {
             StatusUpdated?.Invoke(message);
         }
+
+        /// <summary>
+        /// Initializes the installer check timer that polls every 5 seconds
+        /// to determine whether a Windows Installer (MSI) operation is in progress.
+        /// </summary>
         public InstallFunctions()
         {
             installerCheckTimer = new DispatcherTimer();
-            installerCheckTimer.Interval = TimeSpan.FromSeconds(5); // 5 seconds
+            installerCheckTimer.Interval = TimeSpan.FromSeconds(5);
             installerCheckTimer.Tick += InstallerCheckTimer_Tick;
         }
 
-        public void StartInstallerTimer()
+        /// <summary>
+        /// Starts polling for Windows Installer activity. Resets elapsed time counters
+        /// and begins raising <see cref="InstallerRunningChanged"/> on each tick.
+        /// </summary>
+        /// <param name="operationLabel">A friendly label shown in status messages (e.g. "Windows Uninstaller").</param>
+        public void StartInstallerTimer(string operationLabel = "Windows Installer")
         {
             installerProgressTicks = 0;
             lastInstallerRunning = false;
+            currentOperationLabel = operationLabel;
             installerCheckTimer.Start();
         }
 
+        /// <summary>Stops the installer polling timer and resets tracking state.</summary>
         public void StopInstallerTimer()
         {
             installerCheckTimer.Stop();
@@ -55,60 +74,73 @@ namespace ADO_Tools.Services
             lastInstallerRunning = false;
         }
 
-        // New event for installer running state changes
-        public event Action<bool, int> InstallerRunningChanged;
+        /// <summary>
+        /// Fires when the MSI installer state changes.
+        /// Parameters: (bool isRunning, int elapsedSeconds, string operationLabel)
+        /// </summary>
+        public event Action<bool, int, string> InstallerRunningChanged;
 
+        /// <summary>
+        /// Called every 5 seconds while the timer is active.
+        /// Checks if the MSI engine is running and reports progress or completion.
+        /// </summary>
         private void InstallerCheckTimer_Tick(object sender, object e)
         {
             bool installerRunning = IsInstallerRunning();
 
             if (installerRunning)
             {
+                // Installer is still active – increment counter and notify listeners
                 installerProgressTicks++;
+                int elapsed = installerProgressTicks * 5;
 
-                // Update the log entry in-place (single line, no spam)
-                string progressLine = $"Windows Installer is running. Please wait… ({installerProgressTicks * 5}s elapsed)";
+                string progressLine = $"{currentOperationLabel} is running. Please wait… ({elapsed}s elapsed)";
                 StatusUpdated?.Invoke(progressLine);
-
-                // Notify UI to show/update the InfoBar
-                InstallerRunningChanged?.Invoke(true, installerProgressTicks * 5);
+                InstallerRunningChanged?.Invoke(true, elapsed, currentOperationLabel);
             }
             else if (lastInstallerRunning)
             {
+                // Installer was running on the previous tick but has now stopped – it just finished
                 StopInstallerTimer();
-                StatusUpdated?.Invoke("Windows Installer finished.");
-                InstallerRunningChanged?.Invoke(false, 0);
+                StatusUpdated?.Invoke($"{currentOperationLabel} finished.");
+                InstallerRunningChanged?.Invoke(false, 0, currentOperationLabel);
             }
 
             lastInstallerRunning = installerRunning;
         }
 
-        
-
-         // Registry query for installed software
+        /// <summary>
+        /// Queries the Windows registry (both 32-bit and 64-bit uninstall keys) to find
+        /// all Bentley-published software installed on the machine.
+        /// Returns the list sorted alphabetically by display name.
+        /// </summary>
         public List<InstalledSoftwareInfo> GetInstalledBentleySoftware()
         {
             var result = new List<InstalledSoftwareInfo>();
             string[] registryKeys = {
-            @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
-            @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
-        };
+                @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+                @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
+            };
 
             foreach (var keyPath in registryKeys)
             {
-                using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(keyPath))
+                using (var key = Registry.LocalMachine.OpenSubKey(keyPath))
                 {
                     if (key == null) continue;
                     foreach (var subkeyName in key.GetSubKeyNames())
                     {
                         using (var subkey = key.OpenSubKey(subkeyName))
                         {
+                            // Read relevant registry values for each installed program
                             var _QuietUninstallString = subkey?.GetValue("QuietUninstallString") as string;
                             var _publisher = subkey?.GetValue("Publisher") as string;
                             var _displayName = subkey?.GetValue("DisplayName") as string;
                             var _displayVersion = subkey?.GetValue("DisplayVersion") as string;
+
+                            // Only include entries published by Bentley that have a quiet uninstall command
                             if (!string.IsNullOrEmpty(_QuietUninstallString) && !string.IsNullOrEmpty(_publisher) && _publisher.Contains("Bentley"))
                             {
+                                // Parse the version string (e.g. "23.09.02.015") into its numeric components
                                 var versionParts = (_displayVersion ?? "0.0.0.0").Split('.');
                                 int major = versionParts.Length > 0 ? int.Parse(versionParts[0]) : 0;
                                 int majorSeq = versionParts.Length > 1 ? int.Parse(versionParts[1]) : 0;
@@ -133,47 +165,25 @@ namespace ADO_Tools.Services
             return result.OrderBy(s => s.DisplayName ?? string.Empty).ToList();
         }
 
-
-
-        public async Task UninstallMatchingSoftwareAsync(InstalledSoftwareInfo matchingInstalledBuild, string productName, bool cleanUninstall)
-        {
-            if (matchingInstalledBuild == null)
-            {
-                UpdateStatus($"No matching installed version found for {productName}. Uninstall skipped.");
-                return;
-            }
-
-            string uninstallString = matchingInstalledBuild.QuietUninstallString;
-            string version = matchingInstalledBuild.DisplayVersion;
-            string majorMinorBuild = string.Join(".", version.Split('.').Take(3));
-
-            UpdateStatus($"Searching for installed version {majorMinorBuild}.* ...");
-
-            bool uninstallOk = await UninstallSoftwareAsync(matchingInstalledBuild, cleanUninstall);
-
-            
-        }
-
-
+        /// <summary>
+        /// Runs the quiet uninstall command for the specified Bentley product.
+        /// Optionally performs a clean uninstall (removes leftover folders) on success.
+        /// </summary>
+        /// <param name="matchingInstalledBuild">The software entry to uninstall.</param>
+        /// <param name="cleanUninstall">If true, removes residual folders after a successful uninstall.</param>
+        /// <returns>True if the uninstall completed successfully; false otherwise.</returns>
         public async Task<bool> UninstallSoftwareAsync(InstalledSoftwareInfo matchingInstalledBuild, bool cleanUninstall)
         {
-            bool installerRunning = IsInstallerRunning();
-
-            if (installerRunning)
+            if (IsInstallerRunning())
             {
                 UpdateStatus("Windows Installer already running. Uninstall process aborted!");
                 return false;
             }
 
-
             string uninstallString = matchingInstalledBuild.QuietUninstallString;
             bool success = false;
 
-            //string uninstallString = FindQuietUninstallString(productName, version);
-            UpdateStatus($"Starting uninstall process with command: {uninstallString}");
-
-
-            
+            UpdateStatus($"Starting uninstall: {uninstallString}");
 
             try
             {
@@ -190,32 +200,27 @@ namespace ADO_Tools.Services
                 using (Process process = new Process { StartInfo = startInfo })
                 {
                     process.Start();
-                    StartInstallerTimer();
+                    StartInstallerTimer("Windows Uninstaller");
 
+                    // Read stdout/stderr asynchronously to avoid deadlocks
                     string output = await process.StandardOutput.ReadToEndAsync();
                     string error = await process.StandardError.ReadToEndAsync();
-
                     await Task.Run(() => process.WaitForExit());
 
                     if (process.ExitCode == 0)
                     {
-                        UpdateStatus("Uninstall process completed successfully.");
+                        UpdateStatus("Uninstall completed successfully.");
                         success = true;
                         if (!string.IsNullOrWhiteSpace(output))
-                        {
                             UpdateStatus("Output: " + output.Trim());
-                        }
-
                     }
                     else
                     {
-                        
+                        // Translate the MSI exit code to a human-readable message
                         UpdateStatus(GetHumanReadableExitCode(process.ExitCode));
                         if (!string.IsNullOrWhiteSpace(error))
-                        {
-                            UpdateStatus("Error Output: " + error.Trim());
-                        }
-                        UpdateStatus("Uninstall failed or was cancelled. Uninstall process aborted!");
+                            UpdateStatus("Error: " + error.Trim());
+                        UpdateStatus("Uninstall failed or was cancelled.");
                     }
                 }
             }
@@ -224,34 +229,30 @@ namespace ADO_Tools.Services
                 UpdateStatus("Exception during uninstall: " + ex.Message);
             }
 
-
-
+            // If the standard uninstall succeeded, optionally remove leftover folders
             if (success && cleanUninstall)
             {
                 CleanUninstallBentleyProduct(matchingInstalledBuild);
             }
 
-
-
             StopInstallerTimer();
             return success;
         }
 
-
-
-
-
+        /// <summary>
+        /// Launches the setup executable in quiet mode and waits for it to complete.
+        /// Reports progress via the installer timer and status events.
+        /// </summary>
+        /// <param name="setupFilePath">Full path to the setup .exe file.</param>
         public async Task InstallSoftwareAsync(string setupFilePath)
         {
-            bool installerRunning = IsInstallerRunning();
-
-            if (installerRunning)
+            if (IsInstallerRunning())
             {
                 UpdateStatus("Windows Installer already running. Install process aborted!");
                 return;
             }
 
-            UpdateStatus($"Starting installation from: {setupFilePath}");
+            UpdateStatus($"Starting installation: {setupFilePath}");
             try
             {
                 var processInfo = new ProcessStartInfo
@@ -267,7 +268,7 @@ namespace ADO_Tools.Services
                 using (Process process = new Process { StartInfo = processInfo })
                 {
                     process.Start();
-                    StartInstallerTimer();
+                    StartInstallerTimer("Windows Installer");
 
                     string output = await process.StandardOutput.ReadToEndAsync();
                     string error = await process.StandardError.ReadToEndAsync();
@@ -275,19 +276,15 @@ namespace ADO_Tools.Services
 
                     if (process.ExitCode == 0)
                     {
-                        UpdateStatus("Installation process completed successfully.");
+                        UpdateStatus("Installation completed successfully.");
                         if (!string.IsNullOrWhiteSpace(output))
-                        {
                             UpdateStatus("Output: " + output.Trim());
-                        }
                     }
                     else
                     {
-                        UpdateStatus($"Installation process exited with code {process.ExitCode}.");
+                        UpdateStatus(GetHumanReadableExitCode(process.ExitCode));
                         if (!string.IsNullOrWhiteSpace(error))
-                        {
-                            UpdateStatus("Error Output: " + error.Trim());
-                        }
+                            UpdateStatus("Error: " + error.Trim());
                     }
                 }
             }
@@ -298,18 +295,21 @@ namespace ADO_Tools.Services
             StopInstallerTimer();
         }
 
-
-
-
+        /// <summary>
+        /// Removes residual folders left behind after a Bentley product has been uninstalled.
+        /// Sends leftover directories to the Recycle Bin rather than permanently deleting them.
+        /// Checks the registry first to confirm the product is actually uninstalled.
+        /// </summary>
+        /// <param name="matchingInstalledBuild">The product whose leftovers should be cleaned up.</param>
         public void CleanUninstallBentleyProduct(InstalledSoftwareInfo matchingInstalledBuild)
         {
             if (matchingInstalledBuild == null)
             {
-                UpdateStatus("Clean Uninstall: No matching installed version found for clean uninstall.");
+                UpdateStatus("Clean Uninstall: No matching installed version found.");
                 return;
             }
 
-            // Safety check: verify the software is actually uninstalled before deleting folders
+            // Safety check: verify the product was actually removed before deleting folders
             var stillInstalled = GetInstalledBentleySoftware()
                 .Any(s => s.DisplayName == matchingInstalledBuild.DisplayName
                         && s.DisplayVersion == matchingInstalledBuild.DisplayVersion);
@@ -320,21 +320,19 @@ namespace ADO_Tools.Services
                 return;
             }
 
-            UpdateStatus($"Clean Uninstall started. Recycling remaining folders for {matchingInstalledBuild.DisplayName}...");
+            UpdateStatus($"Clean Uninstall: Recycling remaining folders for {matchingInstalledBuild.DisplayName}...");
 
             string userName = Environment.UserName;
+            var DisplayName = matchingInstalledBuild.DisplayName;
 
-            var DisplayName = matchingInstalledBuild.DisplayName; //"OpenRail Designer 2025"
-            string normalizedProductName = Regex.Replace(DisplayName, @"[\d\s]", ""); //"OpenRailDesigner"
+            // Strip digits and whitespace from the product name to form a normalized key
+            // e.g. "OpenRail Designer 23" → "OpenRailDesigner"
+            string normalizedProductName = Regex.Replace(DisplayName, @"[\d\s]", "");
 
-            var DisplayVersion = matchingInstalledBuild.DisplayVersion;
             var MajorVersion = matchingInstalledBuild.MajorVersion;
             var MajorVersionSequence = matchingInstalledBuild.MajorVersionSequence;
-            var MinorVersion = matchingInstalledBuild.MinorVersion;
-            var MinorRelease = matchingInstalledBuild.MinorRelease;
-            var MinorVersionIteration = matchingInstalledBuild.MinorVersionIteration;
 
-            // Folder patterns (directory, searchPattern) to match and delete
+            // Define the directories and glob patterns where Bentley products leave residual files
             var folderPatterns = new List<(string Directory, string SearchPattern)>
             {
                 (@"C:\Program Files\Bentley", $"*{DisplayName}*"),
@@ -350,7 +348,7 @@ namespace ADO_Tools.Services
                 {
                     if (!Directory.Exists(directory))
                     {
-                        UpdateStatus($"Skipped (directory not found): {directory}");
+                        UpdateStatus($"Skipped (not found): {directory}");
                         continue;
                     }
 
@@ -368,13 +366,13 @@ namespace ADO_Tools.Services
                         }
                         catch (Exception ex)
                         {
-                            UpdateStatus("Error Output: " + ex.Message);
+                            UpdateStatus("Error: " + ex.Message);
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    UpdateStatus("Error Output: " + ex.Message);
+                    UpdateStatus("Error: " + ex.Message);
                 }
             }
 
@@ -390,78 +388,26 @@ namespace ADO_Tools.Services
         }
 
 
+        /// <summary>
+        /// Extracts a version string (e.g. "23.09.02.015") from a setup file name using a regex pattern.
+        /// Returns null if no matching version pattern is found.
+        /// </summary>
         public string ExtractVersionFromSetupFile(string setupFileName)
         {
             var match = Regex.Match(setupFileName, @"(\d{2}\.\d{2}\.\d{2}\.\d{3})");
             return match.Success ? match.Value : null;
         }
 
-
-        private string FindQuietUninstallString(string productName, string version)
-        {
-            const string uninstallKey = @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall";
-
-
-            //convert version name from format "25.00.01" to ""25.0.1" as this is how it is stored in registry
-            version = string.Join(".", version
-                .Split('.')
-                .Select(part => int.Parse(part).ToString()));
-
-
-            // Extract only the first three parts of the version
-            string majorMinorBuild = string.Join(".", version.Split('.').Take(3));
-
-            using (RegistryKey rk = Registry.LocalMachine.OpenSubKey(uninstallKey))
-            {
-                if (rk == null) return null;
-
-                foreach (string subKeyName in rk.GetSubKeyNames())
-                {
-                    using (RegistryKey subKey = rk.OpenSubKey(subKeyName))
-                    {
-                        string uninstallString = subKey?.GetValue("UninstallString") as string; //Check uninstallstring to make sure product name is correct
-                        string ver = subKey?.GetValue("DisplayVersion") as string;
-
-
-                        if (!string.IsNullOrEmpty(uninstallString) &&
-                            uninstallString.IndexOf(productName, StringComparison.OrdinalIgnoreCase) >= 0 &&
-                            !string.IsNullOrEmpty(ver) && ver.StartsWith(majorMinorBuild))
-                        {
-                            return subKey.GetValue("QuietUninstallString") as string;
-                        }
-                    }
-                }
-            }
-
-            return null;
-        }
-
-
-
-        // Helper class
-        public class InstalledSoftwareInfo
-        {
-            public string DisplayName { get; set; }
-            public string DisplayVersion { get; set; }
-            public string QuietUninstallString { get; set; }
-            public int MajorVersion { get; set; }
-            public int MajorVersionSequence { get; set; }
-            public int MinorVersion { get; set; }
-            public int MinorRelease { get; set; }
-            public int MinorVersionIteration { get; set; }
-        }
-
-
-
-
-
-        //Extracts the contents of the zip files, in the subfolders to a single extractPath folder
+        /// <summary>
+        /// Extracts all files from a ZIP archive into the specified directory,
+        /// overwriting existing files. Reports per-file extraction progress via <see cref="StatusUpdated"/>.
+        /// </summary>
+        /// <param name="zipFilePath">Full path to the ZIP file.</param>
+        /// <param name="extractPath">Destination directory (created if it doesn't exist).</param>
         public void ExtractZipToDirectory(string zipFilePath, string extractPath)
         {
-            // Ensure the extract path exists
             Directory.CreateDirectory(extractPath);
-
-            UpdateStatus($"Starting extraction of ZIP file: {Path.GetFileName(zipFilePath)}");
+            UpdateStatus($"Extracting: {Path.GetFileName(zipFilePath)}");
 
             using (ZipArchive archive = ZipFile.OpenRead(zipFilePath))
             {
@@ -470,15 +416,13 @@ namespace ADO_Tools.Services
 
                 foreach (ZipArchiveEntry entry in archive.Entries)
                 {
-                    if (string.IsNullOrEmpty(entry.Name)) continue; // Skip directories
+                    if (string.IsNullOrEmpty(entry.Name)) continue;
 
                     string destinationPath = Path.Combine(extractPath, entry.Name);
-
                     try
                     {
                         entry.ExtractToFile(destinationPath, true);
                         extractedCount++;
-
                         UpdateStatus($"Extracted {entry.Name} ({extractedCount}/{totalEntries})");
                     }
                     catch (Exception ex)
@@ -488,185 +432,93 @@ namespace ADO_Tools.Services
                 }
             }
 
-            UpdateStatus($"Extraction complete. Files extracted to: {extractPath}");
+            UpdateStatus($"Extraction complete: {extractPath}");
         }
 
-        private void UninstallSoftwareOLD(string uninstallCommand)
-        {
-            try
-            {
-                ProcessStartInfo startInfo = new ProcessStartInfo
-                {
-                    FileName = "cmd.exe",
-                    Arguments = "/C " + uninstallCommand,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
-
-                using (Process process = Process.Start(startInfo))
-                {
-                    process.WaitForExit();
-                    UpdateStatus("Uninstall process completed.");
-                }
-            }
-            catch (Exception ex)
-            {
-                UpdateStatus("Error during uninstall: " + ex.Message);
-            }
-        }
-
-
-
-        private void UninstallSoftware(string uninstallCommand)
-        {
-            UpdateStatus($"Starting uninstall process with command: {uninstallCommand}");
-
-            try
-            {
-                ProcessStartInfo startInfo = new ProcessStartInfo
-                {
-                    FileName = "cmd.exe",
-                    Arguments = "/C " + uninstallCommand,
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true
-                };
-
-                using (Process process = Process.Start(startInfo))
-                {
-                    string output = process.StandardOutput.ReadToEnd();
-                    string error = process.StandardError.ReadToEnd();
-
-                    process.WaitForExit();
-
-                    if (process.ExitCode == 0)
-                    {
-                        UpdateStatus("Uninstall process completed successfully.");
-                        if (!string.IsNullOrWhiteSpace(output))
-                        {
-                            UpdateStatus("Output: " + output.Trim());
-                        }
-                    }
-                    else
-                    {
-                        UpdateStatus($"Uninstall process exited with code {process.ExitCode}.");
-                        if (!string.IsNullOrWhiteSpace(error))
-                        {
-                            UpdateStatus("Error Output: " + error.Trim());
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                UpdateStatus("Exception during uninstall: " + ex.Message);
-            }
-        }
-
-
-        private void InstallSoftwareOLD(string setupFilePath)
-        {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = setupFilePath,
-                Arguments = "/quiet",
-                UseShellExecute = false,
-                CreateNoWindow = true
-            });//
-        }
-
-
-        private void InstallSoftware(string setupFilePath)
-        {
-            UpdateStatus($"Starting installation from: {setupFilePath}");
-
-            try
-            {
-                var processInfo = new ProcessStartInfo
-                {
-                    FileName = setupFilePath,
-                    Arguments = "/quiet",
-                    UseShellExecute = false, // Enables UI
-                    Verb = "runas" // Prompts for admin rights
-                };
-
-
-
-
-
-                Process process = Process.Start(processInfo);
-
-                if (process != null)
-                {
-                    UpdateStatus("Installation process started successfully.");
-                }
-                else
-                {
-                    UpdateStatus("Failed to start the installation process.");
-                }
-            }
-            catch (Exception ex)
-            {
-                UpdateStatus($"Error during installation: {ex.Message}");
-            }
-        }
-
-
+        /// <summary>
+        /// Translates common MSI / process exit codes into user-friendly messages.
+        /// </summary>
         private string GetHumanReadableExitCode(int exitCode)
         {
-            switch (exitCode)
+            return exitCode switch
             {
-                case 0:
-                    return "Operation completed successfully.";
-                case -2147023294: // 0x80070002
-                case unchecked((int)0x80070002):
-                    return "The system cannot find the file specified. This may occur if the user cancels the operation or the required file is missing.";
-                case 1:
-                    return "Operation failed. General error.";
-                case 2:
-                    return "File not found.";
-                case 3:
-                    return "Path not found.";
-                case 5:
-                    return "Access denied. You may need administrator privileges.";
-                case 1602: // MSI installer
-                    return "User cancelled the installation or uninstallation.";
-                case 1603: // MSI installer
-                    return "Fatal error during installation or uninstallation.";
-                case 1618: // MSI installer
-                    return "Another installation is already in progress.";
-                default:
-                    return $"Unknown error (exit code: {exitCode}).";
-            }
+                0 => "Operation completed successfully.",
+                unchecked((int)0x80070002) => "File not found or user cancelled the operation.",
+                1 => "General error.",
+                2 => "File not found.",
+                3 => "Path not found.",
+                5 => "Access denied. Administrator privileges may be required.",
+                1602 => "User cancelled the operation.",
+                1603 => "Fatal error during operation.",
+                1618 => "Another installation is already in progress.",
+                _ => $"Unknown error (exit code: {exitCode})."
+            };
         }
 
+        /// <summary>
+        /// Checks whether the Windows Installer engine (msiexec) is currently running
+        /// by attempting to open the global MSI mutex. If the mutex exists, an MSI
+        /// operation is in progress.
+        /// </summary>
+        /// <returns>True if Windows Installer is currently executing an operation.</returns>
         public static bool IsInstallerRunning()
         {
-            // The Windows Installer holds the "Global\_MSIExecute" mutex
-            // while any MSI installation is in progress.
             try
             {
+                // The "Global\_MSIExecute" mutex is held by msiexec while an install/uninstall is active
                 using var mutex = Mutex.OpenExisting(@"Global\_MSIExecute");
-                // If we reach here, the mutex exists — an install is running.
                 return true;
             }
             catch (WaitHandleCannotBeOpenedException)
             {
-                // Mutex does not exist — no MSI install is running.
+                // Mutex doesn't exist – no MSI operation in progress
                 return false;
             }
             catch (UnauthorizedAccessException)
             {
-                // Mutex exists but we can't open it — an install is running.
+                // Mutex exists but we can't access it – installer is running under a different context
                 return true;
             }
         }
-      
+
+        /// <summary>
+        /// Represents a Bentley software product discovered in the Windows registry.
+        /// Version components follow the Bentley convention: Major.MajorSequence.Minor.Iteration
+        /// (e.g. 23.09.02.015).
+        /// </summary>
+        public class InstalledSoftwareInfo
+        {
+            /// <summary>Display name as shown in "Programs and Features" (e.g. "OpenRail Designer").</summary>
+            public string DisplayName { get; set; }
+
+            /// <summary>Full version string (e.g. "23.09.02.015").</summary>
+            public string DisplayVersion { get; set; }
+
+            /// <summary>Command line used to silently uninstall the product.</summary>
+            public string QuietUninstallString { get; set; }
+
+            /// <summary>First component of the version (e.g. 23).</summary>
+            public int MajorVersion { get; set; }
+
+            /// <summary>Second component – major version sequence (e.g. 09).</summary>
+            public int MajorVersionSequence { get; set; }
+
+            /// <summary>Third component – minor version (e.g. 02).</summary>
+            public int MinorVersion { get; set; }
+
+            /// <summary>Minor release number.</summary>
+            public int MinorRelease { get; set; }
+
+            /// <summary>Fourth component – build iteration (e.g. 015).</summary>
+            public int MinorVersionIteration { get; set; }
+        }
     }
-
-
 }
+
+
+
+
+
 
 
 
