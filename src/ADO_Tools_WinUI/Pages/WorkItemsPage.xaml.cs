@@ -19,11 +19,16 @@ namespace ADO_Tools_WinUI.Pages
 {
     public sealed partial class WorkItemsPage : Page
     {
+        private enum ListMode { Query, Search }
+
         private TfsRestClient? _tfsRest;
         private List<QueryDto> _queryList = new();
         private List<WorkItemDto> _workItemList = new();
         private readonly ObservableCollection<WorkItemRow> _rows = new();
         private SemanticSearchService? _semanticSearch;
+        private ListMode _listMode = ListMode.Query;
+        private string _lastQueryName = "";
+        private string _lastSearchQuery = "";
 
         public WorkItemsPage()
         {
@@ -58,6 +63,26 @@ namespace ADO_Tools_WinUI.Pages
         }
 
         // ?? Helpers ?????????????????????????????????????????????????????
+
+        private void UpdateContextBadge()
+        {
+            if (_listMode == ListMode.Query)
+            {
+                badgeIcon.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0, 120, 212));
+                badgeGlyph.Glyph = "\uE8A7";
+                lblContextBadge.Text = string.IsNullOrEmpty(_lastQueryName)
+                    ? "Query Results"
+                    : $"Query: {_lastQueryName}";
+            }
+            else
+            {
+                badgeIcon.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 116, 77, 169));
+                badgeGlyph.Glyph = "\uE721";
+                lblContextBadge.Text = string.IsNullOrEmpty(_lastSearchQuery)
+                    ? "Search Results"
+                    : $"Search: \u201c{_lastSearchQuery}\u201d";
+            }
+        }
 
         private void PersistSettings()
         {
@@ -235,6 +260,9 @@ namespace ADO_Tools_WinUI.Pages
                 _workItemList = new List<WorkItemDto>();
             }
 
+            _listMode = ListMode.Query;
+            _lastQueryName = queryPath.Contains('/') ? queryPath[(queryPath.LastIndexOf('/') + 1)..] : queryPath;
+
             if (_workItemList.Count == 0)
             {
                 lblItemCount.Text = "0 items";
@@ -248,6 +276,7 @@ namespace ADO_Tools_WinUI.Pages
                 HighlightRows();
             }
 
+            UpdateContextBadge();
             progressBar.IsIndeterminate = false;
             progressBar.Visibility = Visibility.Collapsed;
             btnReadItems.IsEnabled = true;
@@ -643,7 +672,10 @@ namespace ADO_Tools_WinUI.Pages
                 });
             }
 
+            _listMode = ListMode.Search;
+            _lastSearchQuery = query;
             lblItemCount.Text = $"{results.Count} matches";
+            UpdateContextBadge();
             progressBar.IsIndeterminate = false;
             progressBar.Visibility = Visibility.Collapsed;
         }
@@ -654,7 +686,10 @@ namespace ADO_Tools_WinUI.Pages
             _rows.Clear();
             foreach (var row in BuildRows(_workItemList))
                 _rows.Add(row);
+
+            _listMode = ListMode.Query;
             lblItemCount.Text = $"{_workItemList.Count} items";
+            UpdateContextBadge();
         }
 
         private async void BtnForceRebuild_Click(object sender, RoutedEventArgs e)
