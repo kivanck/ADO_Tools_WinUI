@@ -13,6 +13,7 @@ namespace ADO_Tools_WinUI.Services
         private readonly InferenceSession _session;
         private readonly BertTokenizer _tokenizer;
         private const int MaxTokens = 256;
+        private const int ChunkOverlapTokens = 32;
 
         public LocalEmbeddingService(string modelDir)
         {
@@ -33,6 +34,49 @@ namespace ADO_Tools_WinUI.Services
             // BertTokenizer.EncodeToIds adds [CLS] and [SEP] automatically
             var ids = _tokenizer.EncodeToIds(text, MaxTokens, out _, out _);
 
+            return EmbedTokenIds(ids);
+        }
+
+        /// <summary>
+        /// Produces multiple embeddings for long text by chunking tokens with overlap.
+        /// Each chunk is MaxTokens long (including [CLS]/[SEP] overhead).
+        /// Returns one embedding per chunk so callers can match against the best one.
+        /// </summary>
+        public List<float[]> GetChunkedEmbeddings(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return [new float[384]];
+
+            // Encode the full text without truncation limit
+            var allIds = _tokenizer.EncodeToIds(text, int.MaxValue, out _, out _);
+
+            // If it fits in a single chunk, just return one embedding
+            if (allIds.Count <= MaxTokens)
+                return [EmbedTokenIds(allIds)];
+
+            // The tokenizer adds [CLS] (101) at start and [SEP] (102) at end.
+            // Strip them so we can re-chunk the "content" tokens, then re-add per chunk.
+            var contentIds = allIds.Skip(1).Take(allIds.Count - 2).ToList();
+            int contentMaxPerChunk = MaxTokens - 2; // room for [CLS] and [SEP]
+            int stride = contentMaxPerChunk - ChunkOverlapTokens;
+            if (stride < 1) stride = 1;
+
+            var results = new List<float[]>();
+            for (int offset = 0; offset < contentIds.Count; offset += stride)
+            {
+                var chunkContent = contentIds.Skip(offset).Take(contentMaxPerChunk).ToList();
+                // Rebuild a full token sequence: [CLS] + chunk + [SEP]
+                var chunkIds = new List<int> { 101 };
+                chunkIds.AddRange(chunkContent);
+                chunkIds.Add(102);
+                results.Add(EmbedTokenIds(chunkIds));
+            }
+
+            return results;
+        }
+
+        private float[] EmbedTokenIds(IReadOnlyList<int> ids)
+        {
             int seqLen = ids.Count;
             var inputIds = new long[seqLen];
             var attentionMask = new long[seqLen];
@@ -58,8 +102,6 @@ namespace ADO_Tools_WinUI.Services
 
             using var results = _session.Run(inputs);
 
-            // Model output: last_hidden_state [1, seqLen, 384]
-            // Mean pooling over token dimension
             var output = results.First().AsTensor<float>();
             int embDim = output.Dimensions[2];
             var embedding = new float[embDim];
@@ -71,11 +113,9 @@ namespace ADO_Tools_WinUI.Services
                     embedding[d] += output[0, t, d];
             }
 
-            int tokenCount = seqLen; // All tokens have attention_mask = 1
             for (int d = 0; d < embDim; d++)
-                embedding[d] /= tokenCount;
+                embedding[d] /= seqLen;
 
-            // L2 normalize
             float norm = MathF.Sqrt(embedding.Sum(x => x * x));
             if (norm > 0)
             {

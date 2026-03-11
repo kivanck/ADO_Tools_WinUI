@@ -98,7 +98,7 @@ namespace ADO_Tools_WinUI.Services
             return needsEmbedding;
         }
 
-        public void AddOrUpdate(WorkItemDto wi, float[] embedding)
+        public void AddOrUpdate(WorkItemDto wi, List<float[]> embeddings)
         {
             string changedDate = wi.Fields.TryGetValue("System.ChangedDate", out var cd) ? cd?.ToString() ?? "" : "";
 
@@ -113,7 +113,8 @@ namespace ADO_Tools_WinUI.Services
                 IterationPath = wi.IterationPath ?? "",
                 HtmlUrl = wi.HtmlUrl ?? "",
                 ChangedDate = changedDate,
-                Embedding = embedding
+                Embedding = embeddings[0],
+                ExtraEmbeddings = embeddings.Count > 1 ? embeddings.Skip(1).ToList() : null
             };
 
             if (DateTime.TryParse(changedDate, out var dt) && dt > LastUpdatedUtc)

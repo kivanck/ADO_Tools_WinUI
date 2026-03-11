@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace ADO_Tools.Models
 {
@@ -13,6 +14,17 @@ namespace ADO_Tools.Models
         public string IterationPath { get; set; } = "";
         public string HtmlUrl { get; set; } = "";
         public string ChangedDate { get; set; } = "";
-        public float[] Embedding { get; set; } = Array.Empty<float>();
+
+        /// <summary>
+        /// Primary embedding (first chunk, or the single embedding for short items).
+        /// Kept for backward compatibility with existing cache files.
+        /// </summary>
+        public float[] Embedding { get; set; } = [];
+
+        /// <summary>
+        /// Additional chunk embeddings for long work items (chunks 2+).
+        /// Null or empty means the item fits in a single chunk.
+        /// </summary>
+        public List<float[]>? ExtraEmbeddings { get; set; }
     }
 }
