@@ -27,6 +27,22 @@ namespace ADO_Tools.Services
             _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", auth);
         }
 
+        /// <summary>
+        /// Returns a list of work item type names available in the project (e.g. "Bug", "Product Backlog Item", "User Story").
+        /// </summary>
+        public async Task<List<string>> GetWorkItemTypeNamesAsync()
+        {
+            string url = $"{baseUrl}/wit/workitemtypes?api-version=7.1";
+            var resp = await _http.GetAsync(url);
+            resp.EnsureSuccessStatusCode();
+            var json = JObject.Parse(await resp.Content.ReadAsStringAsync());
+
+            return json["value"]?
+                .Select(t => t["name"]?.ToString() ?? "")
+                .Where(n => !string.IsNullOrEmpty(n))
+                .ToList() ?? new List<string>();
+        }
+
         public async Task<List<QueryDto>> GetQueriesAsync()
         {
             var result = new List<QueryDto>();
@@ -80,8 +96,39 @@ namespace ADO_Tools.Services
             var ids = json["workItems"]?.Select(x => (int?)x["id"])?.Where(i => i.HasValue)?.Select(i => i.Value).ToList();
             if (ids == null || ids.Count == 0) return list;
 
-            // Step 2: Fetch work item details
-            var chunkSize = 200;
+            return await FetchWorkItemsByIdsAsync(ids);
+        }
+
+        public async Task<List<WorkItemDto>> QueryByWiqlAsync(string wiql, int top = 20000, Action<int, int>? progressCallback = null)
+        {
+            var list = new List<WorkItemDto>();
+            if (string.IsNullOrWhiteSpace(wiql)) return list;
+
+            var body = new StringContent(
+                JsonConvert.SerializeObject(new { query = wiql }),
+                Encoding.UTF8, "application/json");
+
+            var resp = await _http.PostAsync($"{baseUrl}/wit/wiql?$top={top}&api-version=7.1", body);
+            if (!resp.IsSuccessStatusCode)
+            {
+                var errorBody = await resp.Content.ReadAsStringAsync();
+                throw new HttpRequestException($"WIQL query failed ({resp.StatusCode}): {errorBody}");
+            }
+            var json = JObject.Parse(await resp.Content.ReadAsStringAsync());
+
+            var ids = json["workItems"]?.Select(x => (int?)x["id"])?.Where(i => i.HasValue)?.Select(i => i.Value).ToList();
+            if (ids == null || ids.Count == 0) return list;
+
+            return await FetchWorkItemsByIdsAsync(ids, progressCallback);
+        }
+
+        private async Task<List<WorkItemDto>> FetchWorkItemsByIdsAsync(List<int> ids, Action<int, int>? progressCallback = null)
+        {
+            var list = new List<WorkItemDto>();
+            var chunkSize = 100;
+            var commentsCutoff = new DateTime(2024, 1, 1);
+            int totalIds = ids.Count;
+
             for (int i = 0; i < ids.Count; i += chunkSize)
             {
                 var chunk = ids.Skip(i).Take(chunkSize).ToList();
@@ -93,49 +140,27 @@ namespace ADO_Tools.Services
 
                 foreach (var wi in j2["value"])
                 {
-                    DateTime createdDate = DateTime.MinValue;
-                    var createdDateStr = wi["fields"]?["System.CreatedDate"]?.ToString();
-                    if (!string.IsNullOrEmpty(createdDateStr)) DateTime.TryParse(createdDateStr, out createdDate);
+                    var dto = ParseWorkItem(wi);
 
-                    var dto = new WorkItemDto
+                    // Fetch discussion comments only for recent items with meaningful discussion
+                    int commentCount = wi["fields"]?["System.CommentCount"]?.Value<int>() ?? 0;
+                    if (commentCount > 1 && dto.CreatedDate >= commentsCutoff)
                     {
-                        Id = wi["id"].Value<int>(),
-                        Title = wi["fields"]?["System.Title"]?.ToString(),
-                        State = wi["fields"]?["System.State"]?.ToString(),
-                        CreatedBy = wi["fields"]?["System.CreatedBy"]?["displayName"]?.ToString() ?? wi["fields"]?["System.CreatedBy"]?.ToString(),
-                        CreatedDate = createdDate,
-                        TypeName = wi["fields"]?["System.WorkItemType"]?.ToString(),
-                        IterationPath = wi["fields"]?["System.IterationPath"]?.ToString(),
-                        HtmlUrl = wi["_links"]?["html"]?["href"]?.ToString()
-                    };
-
-                    if (wi["relations"] != null)
-                    {
-                        foreach (var rel in wi["relations"])
-                        {
-                            if (rel["rel"]?.ToString() == "AttachedFile")
-                            {
-                                var urlRef = rel["url"]?.ToString();
-                                var fileName = rel["attributes"]?["name"]?.ToString() ?? Path.GetFileName(urlRef ?? string.Empty);
-                                dto.Attachments.Add(new AttachmentDto { Url = urlRef, FileName = fileName });
-                            }
-                        }
+                        var comments = await GetWorkItemCommentsAsync(dto.Id);
+                        if (comments.Count > 0)
+                            dto.Fields["_CommentsCombined"] = string.Join("\n", comments);
                     }
 
                     list.Add(dto);
                 }
-            }
 
+                progressCallback?.Invoke(Math.Min(i + chunkSize, totalIds), totalIds);
+            }
             return list;
         }
 
-        public async Task<WorkItemDto?> GetWorkItemAsync(int id)
+        private static WorkItemDto ParseWorkItem(JToken wi)
         {
-            string url = $"{baseUrl}/wit/workitems/{id}?$expand=All&api-version=7.1";
-            var resp = await _http.GetAsync(url);
-            resp.EnsureSuccessStatusCode();
-            var wi = JObject.Parse(await resp.Content.ReadAsStringAsync());
-
             DateTime createdDate = DateTime.MinValue;
             var createdDateStr = wi["fields"]?["System.CreatedDate"]?.ToString();
             if (!string.IsNullOrEmpty(createdDateStr)) DateTime.TryParse(createdDateStr, out createdDate);
@@ -145,12 +170,38 @@ namespace ADO_Tools.Services
                 Id = wi["id"].Value<int>(),
                 Title = wi["fields"]?["System.Title"]?.ToString(),
                 State = wi["fields"]?["System.State"]?.ToString(),
-                CreatedBy = wi["fields"]?["System.CreatedBy"]?["displayName"]?.ToString(),
+                CreatedBy = wi["fields"]?["System.CreatedBy"]?["displayName"]?.ToString()
+                            ?? wi["fields"]?["System.CreatedBy"]?.ToString(),
                 CreatedDate = createdDate,
                 TypeName = wi["fields"]?["System.WorkItemType"]?.ToString(),
                 IterationPath = wi["fields"]?["System.IterationPath"]?.ToString(),
                 HtmlUrl = wi["_links"]?["html"]?["href"]?.ToString()
             };
+
+            // Store ChangedDate for incremental cache updates
+            dto.Fields["System.ChangedDate"] = wi["fields"]?["System.ChangedDate"]?.ToString() ?? "";
+
+            // Capture rich-text fields for semantic search
+            string[] searchFields =
+            {
+                "System.Description",
+                "Microsoft.VSTS.TCM.ReproSteps",
+                "Microsoft.VSTS.TCM.SystemInfo",
+                "Microsoft.VSTS.Common.AcceptanceCriteria",
+                "Microsoft.VSTS.Common.FixDetails",
+                "System.History",
+                "Custom.InvestigationNotes",
+                "Custom.Notes",
+                "Custom.ProductAffected",
+                "Custom.DefectSource_EA"
+            };
+            foreach (var fieldName in searchFields)
+            {
+                var val = wi["fields"]?[fieldName]?.ToString();
+                if (!string.IsNullOrEmpty(val))
+                    dto.Fields[fieldName] = val;
+            }
+
             if (wi["relations"] != null)
             {
                 foreach (var rel in wi["relations"])
@@ -163,7 +214,17 @@ namespace ADO_Tools.Services
                     }
                 }
             }
+
             return dto;
+        }
+
+        public async Task<WorkItemDto?> GetWorkItemAsync(int id)
+        {
+            string url = $"{baseUrl}/wit/workitems/{id}?$expand=All&api-version=7.1";
+            var resp = await _http.GetAsync(url);
+            resp.EnsureSuccessStatusCode();
+            var wi = JObject.Parse(await resp.Content.ReadAsStringAsync());
+            return ParseWorkItem(wi);
         }
 
         public async Task<string> DownloadAttachmentAsync(AttachmentDto att, string saveFolder)
@@ -176,6 +237,23 @@ namespace ADO_Tools.Services
             using var fs = new FileStream(filePath, FileMode.Create, FileAccess.Write);
             await stream.CopyToAsync(fs);
             return filePath;
+        }
+
+        public async Task<List<string>> GetWorkItemCommentsAsync(int workItemId)
+        {
+            var comments = new List<string>();
+            string url = $"{baseUrl}/wit/workItems/{workItemId}/comments?api-version=7.1-preview.4";
+            var resp = await _http.GetAsync(url);
+            if (!resp.IsSuccessStatusCode) return comments;
+
+            var json = JObject.Parse(await resp.Content.ReadAsStringAsync());
+            foreach (var comment in json["comments"] ?? Enumerable.Empty<JToken>())
+            {
+                var text = comment["text"]?.ToString();
+                if (!string.IsNullOrWhiteSpace(text))
+                    comments.Add(text);
+            }
+            return comments;
         }
     }
 }

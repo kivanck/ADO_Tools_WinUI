@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using ADO_Tools.Models;
 using ADO_Tools.Services;
 using ADO_Tools.Utilities;
@@ -22,6 +23,7 @@ namespace ADO_Tools_WinUI.Pages
         private List<QueryDto> _queryList = new();
         private List<WorkItemDto> _workItemList = new();
         private readonly ObservableCollection<WorkItemRow> _rows = new();
+        private SemanticSearchService? _semanticSearch;
 
         public WorkItemsPage()
         {
@@ -34,6 +36,7 @@ namespace ADO_Tools_WinUI.Pages
             var s = AppSettings.Default;
             txtProjectName.Text = s.Project;
             txtRootFolder.Text = s.RootFolder;
+            txtAreaPath.Text = s.SearchAreaPath;
             listWorkItems.ItemsSource = _rows;
         }
 
@@ -51,6 +54,7 @@ namespace ADO_Tools_WinUI.Pages
             public DateTime CreatedDate { get; set; }
             public bool Downloaded { get; set; }
             public Brush? RowBackground { get; set; }
+            public string HtmlUrl { get; set; } = "";
         }
 
         // ?? Helpers ?????????????????????????????????????????????????????
@@ -139,7 +143,8 @@ namespace ADO_Tools_WinUI.Pages
                 CreatedDate = wi.CreatedDate,
                 CreatedDateShort = wi.CreatedDate.ToShortDateString(),
                 TypeName = wi.TypeName ?? "",
-                IterationShort = (wi.IterationPath ?? "").Replace("Civil Design\\Civil Designer Products\\", "")
+                IterationShort = (wi.IterationPath ?? "").Replace("Civil Design\\Civil Designer Products\\", ""),
+                HtmlUrl = wi.HtmlUrl ?? ""
             }).ToList();
         }
 
@@ -181,6 +186,8 @@ namespace ADO_Tools_WinUI.Pages
                 btnDownloadSelected.IsEnabled = true;
                 btnDownloadSingle.IsEnabled = true;
                 btnCompare.IsEnabled = true;
+                btnBuildIndex.IsEnabled = true;
+                btnForceRebuild.IsEnabled = true;
             }
             catch (Exception ex)
             {
@@ -189,6 +196,8 @@ namespace ADO_Tools_WinUI.Pages
                 btnDownloadSelected.IsEnabled = false;
                 btnDownloadSingle.IsEnabled = false;
                 btnCompare.IsEnabled = false;
+                btnBuildIndex.IsEnabled = false;
+                btnForceRebuild.IsEnabled = false;
             }
 
             progressBar.IsIndeterminate = false;
@@ -482,12 +491,11 @@ namespace ADO_Tools_WinUI.Pages
         private void ListWorkItems_DoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
         {
             if (listWorkItems.SelectedItem is not WorkItemRow row) return;
-            var workItem = _workItemList.FirstOrDefault(w => w.Id == row.Id);
-            if (workItem?.HtmlUrl == null) return;
+            if (string.IsNullOrEmpty(row.HtmlUrl)) return;
 
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
-                FileName = workItem.HtmlUrl,
+                FileName = row.HtmlUrl,
                 UseShellExecute = true
             });
         }
@@ -512,6 +520,232 @@ namespace ADO_Tools_WinUI.Pages
                 txtRootFolder.Text = folder.Path;
                 PersistSettings();
             }
+        }
+
+        // ?? Semantic Search ?????????????????????????????????????????????
+
+        private async void BtnBuildIndex_Click(object sender, RoutedEventArgs e)
+        {
+            if (_tfsRest == null)
+            {
+                ShowMessage("Connect to a project first.", "Not Connected");
+                return;
+            }
+
+            var settings = AppSettings.Default;
+            string modelDir = Path.Combine(AppContext.BaseDirectory, "Assets", "Models");
+
+            if (!File.Exists(Path.Combine(modelDir, "model.onnx")))
+            {
+                ShowMessage(
+                    "Embedding model not found.\n\n" +
+                    "Place 'model.onnx' and 'vocab.txt' in:\n" +
+                    modelDir,
+                    "Model Missing");
+                return;
+            }
+
+            btnBuildIndex.IsEnabled = false;
+            txtSemanticSearch.IsEnabled = false;
+            progressBar.IsIndeterminate = true;
+            progressBar.Visibility = Visibility.Visible;
+
+            try
+            {
+                _semanticSearch?.Dispose();
+                string cacheDir = Path.Combine(AppContext.BaseDirectory, "EmbeddingCache");
+                _semanticSearch = new SemanticSearchService(modelDir, cacheDir);
+                _semanticSearch.StatusUpdated += msg =>
+                    DispatcherQueue.TryEnqueue(() => lblCacheStatus.Text = msg);
+
+                string areaPath = txtAreaPath.Text.Trim();
+                settings.SearchAreaPath = areaPath;
+                settings.Save();
+
+                await _semanticSearch.BuildOrUpdateCacheAsync(
+                    _tfsRest,
+                    settings.Organization,
+                    settings.Project,
+                    areaPath,
+                    progressCallback: (current, total) =>
+                    {
+                        DispatcherQueue.TryEnqueue(() =>
+                            lblCacheStatus.Text = $"Embedding {current}/{total}…");
+                    });
+
+                txtSemanticSearch.IsEnabled = true;
+                lblCacheStatus.Text = $"Ready — {_semanticSearch.CachedItemCount} items indexed";
+            }
+            catch (Exception ex)
+            {
+                var errorBox = new TextBox
+                {
+                    Text = ex.Message,
+                    TextWrapping = TextWrapping.Wrap,
+                    IsReadOnly = true,
+                    BorderThickness = new Thickness(0)
+                };
+                await new ContentDialog
+                {
+                    Title = "Error",
+                    Content = errorBox,
+                    CloseButtonText = "OK",
+                    XamlRoot = this.XamlRoot
+                }.ShowAsync();
+                lblCacheStatus.Text = "Index build failed";
+            }
+
+            progressBar.IsIndeterminate = false;
+            progressBar.Visibility = Visibility.Collapsed;
+            btnBuildIndex.IsEnabled = true;
+        }
+
+        private async void TxtSemanticSearch_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
+        {
+            await RunSemanticSearchAsync();
+        }
+
+        private async Task RunSemanticSearchAsync()
+        {
+            if (_semanticSearch == null || !_semanticSearch.IsReady) return;
+
+            string query = txtSemanticSearch.Text?.Trim() ?? "";
+            if (string.IsNullOrEmpty(query))
+            {
+                BtnClearSearch_Click(null!, null!);
+                return;
+            }
+
+            progressBar.IsIndeterminate = true;
+            progressBar.Visibility = Visibility.Visible;
+
+            bool excludeDone = chkExcludeDone.IsChecked == true;
+            int topN = (int)numTopResults.Value;
+
+            var results = await Task.Run(() =>
+                _semanticSearch.Search(query, topN, excludeDone));
+
+            _rows.Clear();
+            foreach (var r in results)
+            {
+                var entry = r.CacheEntry;
+                _rows.Add(new WorkItemRow
+                {
+                    Id = entry.WorkItemId,
+                    Title = $"[{r.Score:P0}] {entry.Title}",
+                    State = entry.State,
+                    CreatedBy = entry.CreatedBy,
+                    CreatedDate = entry.CreatedDate,
+                    CreatedDateShort = entry.CreatedDate.ToShortDateString(),
+                    TypeName = entry.TypeName,
+                    IterationShort = (entry.IterationPath ?? "").Replace("Civil Design\\Civil Designer Products\\", ""),
+                    HtmlUrl = entry.HtmlUrl ?? ""
+                });
+            }
+
+            lblItemCount.Text = $"{results.Count} matches";
+            progressBar.IsIndeterminate = false;
+            progressBar.Visibility = Visibility.Collapsed;
+        }
+
+        private void BtnClearSearch_Click(object sender, RoutedEventArgs e)
+        {
+            txtSemanticSearch.Text = "";
+            _rows.Clear();
+            foreach (var row in BuildRows(_workItemList))
+                _rows.Add(row);
+            lblItemCount.Text = $"{_workItemList.Count} items";
+        }
+
+        private async void BtnForceRebuild_Click(object sender, RoutedEventArgs e)
+        {
+            if (_tfsRest == null)
+            {
+                ShowMessage("Connect to a project first.", "Not Connected");
+                return;
+            }
+
+            var confirm = new ContentDialog
+            {
+                Title = "Force Rebuild",
+                Content = "This will delete the existing embedding cache and re-index all work items from scratch. This may take a while.\n\nContinue?",
+                PrimaryButtonText = "Rebuild",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = this.XamlRoot
+            };
+
+            if (await confirm.ShowAsync() != ContentDialogResult.Primary) return;
+
+            var settings = AppSettings.Default;
+            string modelDir = Path.Combine(AppContext.BaseDirectory, "Assets", "Models");
+
+            if (!File.Exists(Path.Combine(modelDir, "model.onnx")))
+            {
+                ShowMessage(
+                    "Embedding model not found.\n\n" +
+                    "Place 'model.onnx' and 'vocab.txt' in:\n" +
+                    modelDir,
+                    "Model Missing");
+                return;
+            }
+
+            btnBuildIndex.IsEnabled = false;
+            btnForceRebuild.IsEnabled = false;
+            txtSemanticSearch.IsEnabled = false;
+            progressBar.IsIndeterminate = true;
+            progressBar.Visibility = Visibility.Visible;
+
+            try
+            {
+                _semanticSearch?.Dispose();
+                string cacheDir = Path.Combine(AppContext.BaseDirectory, "EmbeddingCache");
+                _semanticSearch = new SemanticSearchService(modelDir, cacheDir);
+                _semanticSearch.StatusUpdated += msg =>
+                    DispatcherQueue.TryEnqueue(() => lblCacheStatus.Text = msg);
+
+                string areaPath = txtAreaPath.Text.Trim();
+                settings.SearchAreaPath = areaPath;
+                settings.Save();
+
+                await _semanticSearch.BuildOrUpdateCacheAsync(
+                    _tfsRest,
+                    settings.Organization,
+                    settings.Project,
+                    areaPath,
+                    forceRebuild: true,
+                    progressCallback: (current, total) =>
+                    {
+                        DispatcherQueue.TryEnqueue(() =>
+                            lblCacheStatus.Text = $"Embedding {current}/{total}…");
+                    });
+
+                txtSemanticSearch.IsEnabled = true;
+                lblCacheStatus.Text = $"Ready — {_semanticSearch.CachedItemCount} items indexed (rebuilt)";
+            }
+            catch (Exception ex)
+            {
+                var errorBox = new TextBox
+                {
+                    Text = ex.Message,
+                    TextWrapping = TextWrapping.Wrap,
+                    IsReadOnly = true,
+                    BorderThickness = new Thickness(0)
+                };
+                await new ContentDialog
+                {
+                    Title = "Error",
+                    Content = errorBox,
+                    CloseButtonText = "OK",
+                    XamlRoot = this.XamlRoot
+                }.ShowAsync();
+                lblCacheStatus.Text = "Index rebuild failed";
+            }
+
+            progressBar.IsIndeterminate = false;
+            progressBar.Visibility = Visibility.Collapsed;
+            btnBuildIndex.IsEnabled = true;
+            btnForceRebuild.IsEnabled = true;
         }
     }
 }

@@ -26,6 +26,7 @@ namespace ADO_Tools_WinUI.Services
         public List<string> UserDefinitionList { get; set; } = new();
         public int BuildCount { get; set; } = 30;
         public string ProductName { get; set; } = "";
+        public string SearchAreaPath { get; set; } = "";
 
         public void Save()
         {

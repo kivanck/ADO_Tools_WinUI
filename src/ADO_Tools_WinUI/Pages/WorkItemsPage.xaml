@@ -212,6 +212,96 @@
                     </Button>
 
                 </Grid>
+
+                <!-- Semantic Search -->
+                <Border BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="0,1,0,0"
+                        Padding="0,14,0,0" Margin="0,10,0,0">
+                    <StackPanel Spacing="10">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Border Background="#744DA9"
+                                    CornerRadius="6" Width="28" Height="28">
+                                <FontIcon Glyph="&#xE721;" FontSize="14" Foreground="White"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <TextBlock Text="Semantic Search"
+                                       Style="{StaticResource BodyStrongTextBlockStyle}"
+                                       VerticalAlignment="Center" />
+                            <TextBlock x:Name="lblCacheStatus"
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                        <Grid ColumnSpacing="10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Iteration Path"
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       VerticalAlignment="Center" />
+                            <TextBox x:Name="txtAreaPath" Grid.Column="1"
+                                     PlaceholderText="e.g. Civil\OpenCivil Designer\Backlog" />
+                            <Button x:Name="btnBuildIndex"
+                                    Grid.Column="2" Height="32"
+                                    IsEnabled="False"
+                                    ToolTipService.ToolTip="Build or update the local embedding cache for the specified area path"
+                                    Click="BtnBuildIndex_Click">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="&#xEBD3;" FontSize="14" />
+                                    <TextBlock Text="Build Index" />
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="btnForceRebuild"
+                                    Grid.Column="3" Height="32"
+                                    IsEnabled="False"
+                                    ToolTipService.ToolTip="Delete existing cache and re-embed all work items from scratch"
+                                    Click="BtnForceRebuild_Click">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="&#xE72C;" FontSize="14" />
+                                    <TextBlock Text="Force Rebuild" />
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+                        <Grid ColumnSpacing="10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <AutoSuggestBox x:Name="txtSemanticSearch"
+                                            Grid.Column="0"
+                                            PlaceholderText="Search by meaning — e.g. 'crash when opening large files'…"
+                                            QueryIcon="Find"
+                                            IsEnabled="False"
+                                            QuerySubmitted="TxtSemanticSearch_QuerySubmitted" />
+                            <CheckBox x:Name="chkExcludeDone"
+                                      Grid.Column="1"
+                                      Content="Exclude Done"
+                                      IsChecked="True"
+                                      VerticalAlignment="Center" />
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6"
+                                        VerticalAlignment="Center">
+                                <TextBlock Text="Top"
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           VerticalAlignment="Center" />
+                                <NumberBox x:Name="numTopResults"
+                                           Value="30" Minimum="1" Maximum="500"
+                                           SpinButtonPlacementMode="Compact"
+                                           Width="100" />
+                            </StackPanel>
+                            <Button x:Name="btnClearSearch"
+                                    Grid.Column="3" Height="32"
+                                    ToolTipService.ToolTip="Clear search and show all loaded items"
+                                    Click="BtnClearSearch_Click">
+                                <FontIcon Glyph="&#xE894;" FontSize="14" />
+                            </Button>
+                        </Grid>
+                    </StackPanel>
+                </Border>
             </StackPanel>
         </Border>
 
