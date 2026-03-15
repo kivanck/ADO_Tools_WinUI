@@ -83,20 +83,27 @@ namespace ADO_Tools.Services
             return result;
         }
 
-        public async Task<List<WorkItemDto>> QueryWorkItemsAsync(string savedQueryUrl)
+        public async Task<QueryExecutionResult> QueryWorkItemsAsync(string savedQueryUrl)
         {
-            var list = new List<WorkItemDto>();
-            if (string.IsNullOrWhiteSpace(savedQueryUrl)) return list;
+            var result = new QueryExecutionResult();
+            if (string.IsNullOrWhiteSpace(savedQueryUrl)) return result;
 
             // Step 1: Execute the saved query directly
             var resp = await _http.GetAsync($"{savedQueryUrl}?api-version=7.1");
             resp.EnsureSuccessStatusCode();
             var json = JObject.Parse(await resp.Content.ReadAsStringAsync());
 
-            var ids = json["workItems"]?.Select(x => (int?)x["id"])?.Where(i => i.HasValue)?.Select(i => i.Value).ToList();
-            if (ids == null || ids.Count == 0) return list;
+            // Capture column definitions from the query
+            result.Columns = json["columns"]?
+                .Select(c => c["referenceName"]?.ToString() ?? "")
+                .Where(c => !string.IsNullOrEmpty(c))
+                .ToList() ?? [];
 
-            return await FetchWorkItemsByIdsAsync(ids);
+            var ids = json["workItems"]?.Select(x => (int?)x["id"])?.Where(i => i.HasValue)?.Select(i => i.Value).ToList();
+            if (ids == null || ids.Count == 0) return result;
+
+            result.WorkItems = await FetchWorkItemsByIdsAsync(ids);
+            return result;
         }
 
         public async Task<List<WorkItemDto>> QueryByWiqlAsync(string wiql, int top = 20000, Action<int, int>? progressCallback = null)

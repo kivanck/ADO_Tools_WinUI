@@ -135,6 +135,26 @@ mc:Ignorable="d">
                             </StackPanel>
                         </Button>
                     </Grid>
+
+                    <!-- Search within query results -->
+                    <Grid ColumnSpacing="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <AutoSuggestBox x:Name="txtQuerySearch"
+                                        Grid.Column="0"
+                                        PlaceholderText="Search within query results (rich text)…"
+                                        QueryIcon="Find"
+                                        IsEnabled="False"
+                                        QuerySubmitted="TxtQuerySearch_QuerySubmitted" />
+                        <Button x:Name="btnClearQuerySearch"
+                                Grid.Column="1" Height="32"
+                                ToolTipService.ToolTip="Clear search and show all query results"
+                                Click="BtnClearQuerySearch_Click">
+                            <FontIcon Glyph="&#xE894;" FontSize="14" />
+                        </Button>
+                    </Grid>
                 </StackPanel>
             </PivotItem>
 

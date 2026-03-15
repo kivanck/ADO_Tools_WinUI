@@ -104,7 +104,8 @@ namespace ADO_Tools.UI
 
             try
             {
-                workItemList = await tfsRest.QueryWorkItemsAsync(wiql);
+                var result = await tfsRest.QueryWorkItemsAsync(wiql);
+                workItemList = result.WorkItems;
             }
             catch (Exception ex)
             {

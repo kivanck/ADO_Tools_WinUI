@@ -1,0 +1,168 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+using ADO_Tools.Models;
+
+namespace ADO_Tools_WinUI.Services
+{
+    /// <summary>
+    /// Lightweight per-query cache that stores searchable text and metadata
+    /// for BM25 search within query results. No embeddings — keeps it fast.
+    /// </summary>
+    public class QuerySearchCache
+    {
+        private readonly string _cacheDir;
+        private readonly string _cacheFilePath;
+        private Dictionary<int, QueryCacheEntry> _entries = new();
+
+        public DateTime LastUpdatedUtc { get; private set; } = DateTime.MinValue;
+        public int Count => _entries.Count;
+
+        public QuerySearchCache(string queryId, string cacheDir)
+        {
+            _cacheDir = cacheDir;
+            Directory.CreateDirectory(_cacheDir);
+            string safeName = SanitizeFileName(queryId);
+            _cacheFilePath = Path.Combine(_cacheDir, $"query_{safeName}.json");
+        }
+
+        public bool TryLoad()
+        {
+            if (!File.Exists(_cacheFilePath))
+                return false;
+
+            try
+            {
+                var json = File.ReadAllText(_cacheFilePath);
+                var wrapper = JsonSerializer.Deserialize<CacheFileWrapper>(json);
+                if (wrapper?.Entries == null)
+                    return false;
+
+                _entries = wrapper.Entries.ToDictionary(e => e.WorkItemId);
+                LastUpdatedUtc = wrapper.LastUpdatedUtc;
+                return _entries.Count > 0;
+            }
+            catch
+            {
+                _entries.Clear();
+                return false;
+            }
+        }
+
+        public async Task SaveAsync()
+        {
+            var wrapper = new CacheFileWrapper
+            {
+                LastUpdatedUtc = LastUpdatedUtc,
+                Entries = _entries.Values.ToList()
+            };
+
+            var options = new JsonSerializerOptions { WriteIndented = false };
+            var json = JsonSerializer.Serialize(wrapper, options);
+            await File.WriteAllTextAsync(_cacheFilePath, json);
+        }
+
+        /// <summary>
+        /// Determines which items need their SearchableText rebuilt,
+        /// and removes stale items no longer in the query results.
+        /// Returns items that are new or changed since last cache.
+        /// </summary>
+        public List<WorkItemDto> GetItemsNeedingUpdate(List<WorkItemDto> freshItems)
+        {
+            var freshIds = new HashSet<int>(freshItems.Select(w => w.Id));
+
+            // Remove items no longer in query results
+            var staleIds = _entries.Keys.Where(id => !freshIds.Contains(id)).ToList();
+            foreach (var id in staleIds)
+                _entries.Remove(id);
+
+            var needsUpdate = new List<WorkItemDto>();
+            foreach (var wi in freshItems)
+            {
+                string changedDate = wi.Fields.TryGetValue("System.ChangedDate", out var cd)
+                    ? cd?.ToString() ?? "" : "";
+
+                if (!_entries.TryGetValue(wi.Id, out var existing) || existing.ChangedDate != changedDate)
+                    needsUpdate.Add(wi);
+            }
+
+            return needsUpdate;
+        }
+
+        public void AddOrUpdate(WorkItemDto wi, string searchableText)
+        {
+            string changedDate = wi.Fields.TryGetValue("System.ChangedDate", out var cd)
+                ? cd?.ToString() ?? "" : "";
+
+            _entries[wi.Id] = new QueryCacheEntry
+            {
+                WorkItemId = wi.Id,
+                Title = wi.Title ?? "",
+                State = wi.State ?? "",
+                TypeName = wi.TypeName ?? "",
+                CreatedBy = wi.CreatedBy ?? "",
+                CreatedDate = wi.CreatedDate,
+                IterationPath = wi.IterationPath ?? "",
+                HtmlUrl = wi.HtmlUrl ?? "",
+                ChangedDate = changedDate,
+                SearchableText = searchableText
+            };
+
+            if (DateTime.TryParse(changedDate, out var dt) && dt > LastUpdatedUtc)
+                LastUpdatedUtc = dt;
+        }
+
+        /// <summary>
+        /// Returns all entries as EmbeddingCacheEntry (compatible with Bm25SearchService).
+        /// </summary>
+        public List<EmbeddingCacheEntry> GetAsBm25Entries()
+        {
+            return _entries.Values.Select(e => new EmbeddingCacheEntry
+            {
+                WorkItemId = e.WorkItemId,
+                Title = e.Title,
+                State = e.State,
+                TypeName = e.TypeName,
+                CreatedBy = e.CreatedBy,
+                CreatedDate = e.CreatedDate,
+                IterationPath = e.IterationPath,
+                HtmlUrl = e.HtmlUrl,
+                ChangedDate = e.ChangedDate,
+                SearchableText = e.SearchableText
+            }).ToList();
+        }
+
+        private static string SanitizeFileName(string input)
+        {
+            return Regex.Replace(input ?? "", @"[^\w\-]", "_");
+        }
+
+        private class CacheFileWrapper
+        {
+            public DateTime LastUpdatedUtc { get; set; }
+            public List<QueryCacheEntry> Entries { get; set; } = [];
+        }
+    }
+
+    /// <summary>
+    /// Cache entry for query search — same fields as EmbeddingCacheEntry
+    /// but without the embedding vectors, keeping the file small and fast.
+    /// </summary>
+    public class QueryCacheEntry
+    {
+        public int WorkItemId { get; set; }
+        public string Title { get; set; } = "";
+        public string State { get; set; } = "";
+        public string TypeName { get; set; } = "";
+        public string CreatedBy { get; set; } = "";
+        public DateTime CreatedDate { get; set; }
+        public string IterationPath { get; set; } = "";
+        public string HtmlUrl { get; set; } = "";
+        public string ChangedDate { get; set; } = "";
+        public string? SearchableText { get; set; }
+    }
+}

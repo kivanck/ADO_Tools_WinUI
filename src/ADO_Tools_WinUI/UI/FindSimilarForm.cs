@@ -159,7 +159,8 @@ namespace ADO_Tools.UI
             try
             {
                 // query work items using REST client
-                workItemList = await tfsRestClient.QueryWorkItemsAsync(wiql);
+                var result = await tfsRestClient.QueryWorkItemsAsync(wiql);
+                workItemList = result.WorkItems;
                 label_numberofItems.Text = workItemList.Count + " items read";
             }
             catch (Exception ex)

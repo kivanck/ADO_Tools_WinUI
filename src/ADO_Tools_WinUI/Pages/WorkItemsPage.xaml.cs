@@ -19,17 +19,50 @@ namespace ADO_Tools_WinUI.Pages
 {
     public sealed partial class WorkItemsPage : Page
     {
-        private enum ListMode { Query, Search }
+        private enum ListMode { Query, SearchQuery, SearchBacklog }
 
         private TfsRestClient? _tfsRest;
         private List<QueryDto> _queryList = new();
         private List<WorkItemDto> _workItemList = new();
         private readonly ObservableCollection<WorkItemRow> _rows = new();
         private SemanticSearchService? _semanticSearch;
-        private Bm25SearchService? _bm25Search;
+        private Bm25SearchService? _bm25BacklogSearch;
+        private Bm25SearchService? _bm25QuerySearch;
+        private QuerySearchCache? _querySearchCache;
         private ListMode _listMode = ListMode.Query;
         private string _lastQueryName = "";
         private string _lastSearchQuery = "";
+        private List<string> _queryColumns = [];
+
+        // Friendly display names for ADO field reference names
+        private static readonly Dictionary<string, string> FieldDisplayNames = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["System.Id"] = "ID",
+            ["System.Title"] = "Title",
+            ["System.State"] = "State",
+            ["System.CreatedBy"] = "Created By",
+            ["System.CreatedDate"] = "Date",
+            ["System.WorkItemType"] = "Type",
+            ["System.IterationPath"] = "Iteration",
+            ["System.AreaPath"] = "Area Path",
+            ["System.AssignedTo"] = "Assigned To",
+            ["System.ChangedDate"] = "Changed",
+            ["System.ChangedBy"] = "Changed By",
+            ["System.Reason"] = "Reason",
+            ["System.Tags"] = "Tags",
+            ["Microsoft.VSTS.Common.Priority"] = "Priority",
+            ["Microsoft.VSTS.Common.Severity"] = "Severity",
+            ["Microsoft.VSTS.Common.Activity"] = "Activity",
+            ["Microsoft.VSTS.Scheduling.Effort"] = "Effort",
+            ["Microsoft.VSTS.Scheduling.StoryPoints"] = "Story Points",
+            ["Microsoft.VSTS.Scheduling.RemainingWork"] = "Remaining",
+            ["Microsoft.VSTS.Common.ValueArea"] = "Value Area",
+        };
+
+        private static readonly List<string> DefaultColumns =
+            ["System.Id", "System.Title", "System.State",
+             "System.CreatedBy", "System.CreatedDate",
+             "System.WorkItemType", "System.IterationPath"];
 
         public WorkItemsPage()
         {
@@ -61,27 +94,41 @@ namespace ADO_Tools_WinUI.Pages
             public bool Downloaded { get; set; }
             public Brush? RowBackground { get; set; }
             public string HtmlUrl { get; set; } = "";
+
+            /// <summary>
+            /// All raw field values from the work item, keyed by reference name.
+            /// Used for dynamic column display.
+            /// </summary>
+            public Dictionary<string, string> FieldValues { get; set; } = [];
         }
 
         // ?? Helpers ?????????????????????????????????????????????????????
 
         private void UpdateContextBadge()
         {
-            if (_listMode == ListMode.Query)
+            switch (_listMode)
             {
-                badgeIcon.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0, 120, 212));
-                badgeGlyph.Glyph = "\uE8A7";
-                lblContextBadge.Text = string.IsNullOrEmpty(_lastQueryName)
-                    ? "Query Results"
-                    : $"Query: {_lastQueryName}";
-            }
-            else
-            {
-                badgeIcon.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 116, 77, 169));
-                badgeGlyph.Glyph = "\uE721";
-                lblContextBadge.Text = string.IsNullOrEmpty(_lastSearchQuery)
-                    ? "Search Results"
-                    : $"Search: \u201c{_lastSearchQuery}\u201d";
+                case ListMode.Query:
+                    badgeIcon.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0, 120, 212));
+                    badgeGlyph.Glyph = "\uE8A7";
+                    lblContextBadge.Text = string.IsNullOrEmpty(_lastQueryName)
+                        ? "Query Results"
+                        : $"Query: {_lastQueryName}";
+                    break;
+                case ListMode.SearchQuery:
+                    badgeIcon.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0, 151, 110));
+                    badgeGlyph.Glyph = "\uE721";
+                    lblContextBadge.Text = string.IsNullOrEmpty(_lastSearchQuery)
+                        ? "Query Search Results"
+                        : $"Search in \u201c{_lastQueryName}\u201d: \u201c{_lastSearchQuery}\u201d";
+                    break;
+                case ListMode.SearchBacklog:
+                    badgeIcon.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 116, 77, 169));
+                    badgeGlyph.Glyph = "\uE721";
+                    lblContextBadge.Text = string.IsNullOrEmpty(_lastSearchQuery)
+                        ? "Backlog Search Results"
+                        : $"Backlog Search: \u201c{_lastSearchQuery}\u201d";
+                    break;
             }
         }
 
@@ -160,7 +207,42 @@ namespace ADO_Tools_WinUI.Pages
 
         private List<WorkItemRow> BuildRows(List<WorkItemDto> items)
         {
-            return items.Select(wi => new WorkItemRow
+            return items.Select(wi => BuildRow(wi)).ToList();
+        }
+
+        private static WorkItemRow BuildRow(WorkItemDto wi)
+        {
+            var fieldValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["System.Id"] = wi.Id.ToString(),
+                ["System.Title"] = wi.Title ?? "",
+                ["System.State"] = wi.State ?? "",
+                ["System.CreatedBy"] = wi.CreatedBy ?? "",
+                ["System.CreatedDate"] = wi.CreatedDate.ToShortDateString(),
+                ["System.WorkItemType"] = wi.TypeName ?? "",
+                ["System.IterationPath"] = wi.IterationPath ?? ""
+            };
+
+            foreach (var kvp in wi.Fields)
+            {
+                if (!fieldValues.ContainsKey(kvp.Key) && kvp.Value != null)
+                {
+                    string val = kvp.Value.ToString() ?? "";
+                    if (val.StartsWith('{'))
+                    {
+                        try
+                        {
+                            var jobj = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(val);
+                            if (jobj != null && jobj.TryGetValue("displayName", out var dn))
+                                val = dn?.ToString() ?? val;
+                        }
+                        catch { /* use raw string */ }
+                    }
+                    fieldValues[kvp.Key] = val;
+                }
+            }
+
+            return new WorkItemRow
             {
                 Id = wi.Id,
                 Title = wi.Title ?? "",
@@ -170,8 +252,148 @@ namespace ADO_Tools_WinUI.Pages
                 CreatedDateShort = wi.CreatedDate.ToShortDateString(),
                 TypeName = wi.TypeName ?? "",
                 IterationShort = (wi.IterationPath ?? "").Replace("Civil Design\\Civil Designer Products\\", ""),
-                HtmlUrl = wi.HtmlUrl ?? ""
-            }).ToList();
+                HtmlUrl = wi.HtmlUrl ?? "",
+                FieldValues = fieldValues
+            };
+        }
+
+        private static WorkItemRow BuildRowFromCacheEntry(EmbeddingCacheEntry entry, string? scorePrefix = null)
+        {
+            string title = scorePrefix != null ? $"{scorePrefix} {entry.Title}" : entry.Title;
+
+            var fieldValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["System.Id"] = entry.WorkItemId.ToString(),
+                ["System.Title"] = title,
+                ["System.State"] = entry.State,
+                ["System.CreatedBy"] = entry.CreatedBy,
+                ["System.CreatedDate"] = entry.CreatedDate.ToShortDateString(),
+                ["System.WorkItemType"] = entry.TypeName,
+                ["System.IterationPath"] = entry.IterationPath
+            };
+
+            return new WorkItemRow
+            {
+                Id = entry.WorkItemId,
+                Title = title,
+                State = entry.State,
+                CreatedBy = entry.CreatedBy,
+                CreatedDate = entry.CreatedDate,
+                CreatedDateShort = entry.CreatedDate.ToShortDateString(),
+                TypeName = entry.TypeName,
+                IterationShort = (entry.IterationPath ?? "").Replace("Civil Design\\Civil Designer Products\\", ""),
+                HtmlUrl = entry.HtmlUrl ?? "",
+                FieldValues = fieldValues
+            };
+        }
+
+        /// <summary>
+        /// Rebuilds the ListView header and item templates to match the given column list.
+        /// Falls back to default columns when columns is empty (backlog search mode).
+        /// </summary>
+        private void ApplyDynamicColumns(List<string> columns)
+        {
+            if (columns.Count == 0)
+                columns = DefaultColumns;
+
+            var colDefs = string.Join("\n",
+                columns.Select(c =>
+                {
+                    if (c == "System.Id") return "<ColumnDefinition Width='70' />";
+                    if (c == "System.Title") return "<ColumnDefinition Width='*' />";
+                    return "<ColumnDefinition Width='Auto' MinWidth='80' />";
+                }));
+
+            var headers = string.Join("\n",
+                columns.Select((c, i) =>
+                {
+                    string name = FieldDisplayNames.TryGetValue(c, out var display) ? display : c.Split('.').Last();
+                    return $"<TextBlock Grid.Column='{i}' Text='{EscapeXml(name)}' FontWeight='SemiBold' />";
+                }));
+
+            string headerXaml = $@"<DataTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'>
+                <Grid Padding='12,8' ColumnSpacing='8'>
+                    <Grid.ColumnDefinitions>{colDefs}</Grid.ColumnDefinitions>
+                    {headers}
+                </Grid>
+            </DataTemplate>";
+
+            listWorkItems.HeaderTemplate = (DataTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(headerXaml);
+
+            // Build item template — bind known fields directly, others via FieldValues
+            var cells = string.Join("\n",
+                columns.Select((c, i) =>
+                {
+                    string trimming = c == "System.Title" || c == "System.IterationPath"
+                        ? " TextTrimming='CharacterEllipsis'" : "";
+
+                    string binding = c switch
+                    {
+                        "System.Id" => "{Binding Id}",
+                        "System.Title" => "{Binding Title}",
+                        "System.State" => "{Binding State}",
+                        "System.CreatedBy" => "{Binding CreatedBy}",
+                        "System.CreatedDate" => "{Binding CreatedDateShort}",
+                        "System.WorkItemType" => "{Binding TypeName}",
+                        "System.IterationPath" => "{Binding IterationShort}",
+                        _ => ""
+                    };
+
+                    if (!string.IsNullOrEmpty(binding))
+                        return $"<TextBlock Grid.Column='{i}' Text='{binding}'{trimming} />";
+
+                    // For dynamic fields, bind via FieldValues indexer
+                    return $"<TextBlock Grid.Column='{i}' Text='{{Binding FieldValues[{EscapeXml(c)}]}}'{trimming} />";
+                }));
+
+            string itemColDefs = string.Join("", columns.Select(c =>
+            {
+                if (c == "System.Id") return "<ColumnDefinition Width='70' />";
+                if (c == "System.Title") return "<ColumnDefinition Width='*' />";
+                return "<ColumnDefinition Width='Auto' MinWidth='80' />";
+            }));
+
+            string itemXaml = $@"<DataTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'>
+                <Grid Padding='12,6' ColumnSpacing='8' Background='{{Binding RowBackground}}'>
+                    <Grid.ColumnDefinitions>{itemColDefs}</Grid.ColumnDefinitions>
+                    {cells}
+                </Grid>
+            </DataTemplate>";
+
+            listWorkItems.ItemTemplate = (DataTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(itemXaml);
+        }
+
+        private static string EscapeXml(string text)
+        {
+            return text.Replace("&", "&amp;").Replace("<", "&lt;")
+                       .Replace(">", "&gt;").Replace("'", "&apos;")
+                       .Replace("\"", "&quot;");
+        }
+
+        /// <summary>
+        /// Builds the BM25 query search cache for the current query results.
+        /// Loads existing cache, only re-processes new/changed items.
+        /// </summary>
+        private async Task BuildQuerySearchIndexAsync(string queryId, List<WorkItemDto> items)
+        {
+            string cacheDir = Path.Combine(AppContext.BaseDirectory, "QueryCache");
+            _querySearchCache = new QuerySearchCache(queryId, cacheDir);
+            _querySearchCache.TryLoad();
+
+            var needsUpdate = _querySearchCache.GetItemsNeedingUpdate(items);
+
+            if (needsUpdate.Count > 0)
+            {
+                foreach (var wi in needsUpdate)
+                {
+                    string searchText = SemanticSearchService.BuildSearchableText(wi);
+                    _querySearchCache.AddOrUpdate(wi, searchText);
+                }
+                await _querySearchCache.SaveAsync();
+            }
+
+            _bm25QuerySearch = new Bm25SearchService();
+            _bm25QuerySearch.BuildIndex(_querySearchCache.GetAsBm25Entries());
         }
 
         // ?? Event Handlers ??????????????????????????????????????????????
@@ -253,20 +475,28 @@ namespace ADO_Tools_WinUI.Pages
 
             try
             {
-                _workItemList = await _tfsRest.QueryWorkItemsAsync(wiql);
+                var result = await _tfsRest.QueryWorkItemsAsync(wiql);
+                _workItemList = result.WorkItems;
+                _queryColumns = result.Columns;
+                q.Columns = result.Columns;
             }
             catch (Exception ex)
             {
                 ShowMessage("Failed to run query: " + ex.Message, "Error");
                 _workItemList = new List<WorkItemDto>();
+                _queryColumns = [];
             }
 
             _listMode = ListMode.Query;
             _lastQueryName = queryPath.Contains('/') ? queryPath[(queryPath.LastIndexOf('/') + 1)..] : queryPath;
 
+            // Apply dynamic columns from the query definition
+            ApplyDynamicColumns(_queryColumns);
+
             if (_workItemList.Count == 0)
             {
                 lblItemCount.Text = "0 items";
+                txtQuerySearch.IsEnabled = false;
             }
             else
             {
@@ -275,6 +505,14 @@ namespace ADO_Tools_WinUI.Pages
 
                 lblItemCount.Text = $"{_workItemList.Count} items";
                 HighlightRows();
+
+                // Build BM25 search index for this query (incremental, cached per query)
+                if (!string.IsNullOrEmpty(q.Id))
+                {
+                    await BuildQuerySearchIndexAsync(q.Id, _workItemList);
+                    txtQuerySearch.IsEnabled = true;
+                    lblItemCount.Text = $"{_workItemList.Count} items (searchable)";
+                }
             }
 
             UpdateContextBadge();
@@ -446,7 +684,8 @@ namespace ADO_Tools_WinUI.Pages
             try
             {
                 string wiql = q2.Wiql ?? "";
-                compareItems = await _tfsRest.QueryWorkItemsAsync(wiql);
+                var result = await _tfsRest.QueryWorkItemsAsync(wiql);
+                compareItems = result.WorkItems;
             }
             catch (Exception ex)
             {
@@ -566,7 +805,62 @@ namespace ADO_Tools_WinUI.Pages
             }
         }
 
-        // ?? Semantic Search ?????????????????????????????????????????????
+        // ?? Query Search (BM25 within query results) ????????????????????
+
+        private async void TxtQuerySearch_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
+        {
+            if (_bm25QuerySearch == null || _bm25QuerySearch.DocumentCount == 0)
+            {
+                ShowMessage("Run a query first to enable search within results.", "No Query Loaded");
+                return;
+            }
+
+            string query = txtQuerySearch.Text?.Trim() ?? "";
+            if (string.IsNullOrEmpty(query))
+            {
+                BtnClearQuerySearch_Click(null!, null!);
+                return;
+            }
+
+            progressBar.IsIndeterminate = true;
+            progressBar.Visibility = Visibility.Visible;
+
+            var results = await Task.Run(() =>
+                _bm25QuerySearch.Search(query, _bm25QuerySearch.DocumentCount));
+
+            // Keep query columns for search-within-query results
+            ApplyDynamicColumns(_queryColumns);
+
+            _rows.Clear();
+            foreach (var r in results)
+                _rows.Add(BuildRowFromCacheEntry(r.CacheEntry, $"[{r.Score:F1}]"));
+
+            _listMode = ListMode.SearchQuery;
+            _lastSearchQuery = query;
+            lblItemCount.Text = $"{results.Count}/{_bm25QuerySearch.DocumentCount} matches in query";
+            UpdateContextBadge();
+            HighlightRows();
+            progressBar.IsIndeterminate = false;
+            progressBar.Visibility = Visibility.Collapsed;
+        }
+
+        private void BtnClearQuerySearch_Click(object sender, RoutedEventArgs e)
+        {
+            txtQuerySearch.Text = "";
+
+            ApplyDynamicColumns(_queryColumns);
+
+            _rows.Clear();
+            foreach (var row in BuildRows(_workItemList))
+                _rows.Add(row);
+
+            _listMode = ListMode.Query;
+            lblItemCount.Text = $"{_workItemList.Count} items";
+            UpdateContextBadge();
+            HighlightRows();
+        }
+
+        // ?? Backlog Search (Semantic + BM25) ????????????????????????????
 
         private async void BtnBuildIndex_Click(object sender, RoutedEventArgs e)
         {
@@ -617,8 +911,8 @@ namespace ADO_Tools_WinUI.Pages
                             lblCacheStatus.Text = $"Embedding {current}/{total}…");
                     });
 
-                _bm25Search = new Bm25SearchService();
-                _bm25Search.BuildIndex(_semanticSearch.GetCacheEntries(false));
+                _bm25BacklogSearch = new Bm25SearchService();
+                _bm25BacklogSearch.BuildIndex(_semanticSearch.GetCacheEntries(false));
 
                 txtSemanticSearch.IsEnabled = true;
                 lblCacheStatus.Text = $"Ready — {_semanticSearch.CachedItemCount} items indexed (Semantic + BM25)";
@@ -659,7 +953,7 @@ namespace ADO_Tools_WinUI.Pages
         {
             bool useKeyword = cmbSearchMode.SelectedIndex == 1;
             if (useKeyword)
-                await RunBm25SearchAsync();
+                await RunBm25BacklogSearchAsync();
             else
                 await RunSemanticSearchAsync();
         }
@@ -684,25 +978,14 @@ namespace ADO_Tools_WinUI.Pages
             var results = await Task.Run(() =>
                 _semanticSearch.Search(query, topN, excludeDone));
 
+            // Reset to default columns for backlog search
+            ApplyDynamicColumns([]);
+
             _rows.Clear();
             foreach (var r in results)
-            {
-                var entry = r.CacheEntry;
-                _rows.Add(new WorkItemRow
-                {
-                    Id = entry.WorkItemId,
-                    Title = $"[{r.Score:P0}] {entry.Title}",
-                    State = entry.State,
-                    CreatedBy = entry.CreatedBy,
-                    CreatedDate = entry.CreatedDate,
-                    CreatedDateShort = entry.CreatedDate.ToShortDateString(),
-                    TypeName = entry.TypeName,
-                    IterationShort = (entry.IterationPath ?? "").Replace("Civil Design\\Civil Designer Products\\", ""),
-                    HtmlUrl = entry.HtmlUrl ?? ""
-                });
-            }
+                _rows.Add(BuildRowFromCacheEntry(r.CacheEntry, $"[{r.Score:P0}]"));
 
-            _listMode = ListMode.Search;
+            _listMode = ListMode.SearchBacklog;
             _lastSearchQuery = query;
             lblItemCount.Text = $"{results.Count} matches";
             UpdateContextBadge();
@@ -710,9 +993,9 @@ namespace ADO_Tools_WinUI.Pages
             progressBar.Visibility = Visibility.Collapsed;
         }
 
-        private async Task RunBm25SearchAsync()
+        private async Task RunBm25BacklogSearchAsync()
         {
-            if (_bm25Search == null || _bm25Search.DocumentCount == 0) return;
+            if (_bm25BacklogSearch == null || _bm25BacklogSearch.DocumentCount == 0) return;
 
             string query = txtSemanticSearch.Text?.Trim() ?? "";
             if (string.IsNullOrEmpty(query))
@@ -728,27 +1011,16 @@ namespace ADO_Tools_WinUI.Pages
             int topN = (int)numTopResults.Value;
 
             var results = await Task.Run(() =>
-                _bm25Search.Search(query, topN, excludeDone));
+                _bm25BacklogSearch.Search(query, topN, excludeDone));
+
+            // Reset to default columns for backlog search
+            ApplyDynamicColumns([]);
 
             _rows.Clear();
             foreach (var r in results)
-            {
-                var entry = r.CacheEntry;
-                _rows.Add(new WorkItemRow
-                {
-                    Id = entry.WorkItemId,
-                    Title = $"[{r.Score:F1}] {entry.Title}",
-                    State = entry.State,
-                    CreatedBy = entry.CreatedBy,
-                    CreatedDate = entry.CreatedDate,
-                    CreatedDateShort = entry.CreatedDate.ToShortDateString(),
-                    TypeName = entry.TypeName,
-                    IterationShort = (entry.IterationPath ?? "").Replace("Civil Design\\Civil Designer Products\\", ""),
-                    HtmlUrl = entry.HtmlUrl ?? ""
-                });
-            }
+                _rows.Add(BuildRowFromCacheEntry(r.CacheEntry, $"[{r.Score:F1}]"));
 
-            _listMode = ListMode.Search;
+            _listMode = ListMode.SearchBacklog;
             _lastSearchQuery = query;
             lblItemCount.Text = $"{results.Count} matches (BM25)";
             UpdateContextBadge();
@@ -759,6 +1031,10 @@ namespace ADO_Tools_WinUI.Pages
         private void BtnClearSearch_Click(object sender, RoutedEventArgs e)
         {
             txtSemanticSearch.Text = "";
+
+            // Restore query columns when going back to query results
+            ApplyDynamicColumns(_queryColumns);
+
             _rows.Clear();
             foreach (var row in BuildRows(_workItemList))
                 _rows.Add(row);
@@ -831,8 +1107,8 @@ namespace ADO_Tools_WinUI.Pages
                             lblCacheStatus.Text = $"Embedding {current}/{total}…");
                     });
 
-                _bm25Search = new Bm25SearchService();
-                _bm25Search.BuildIndex(_semanticSearch.GetCacheEntries(false));
+                _bm25BacklogSearch = new Bm25SearchService();
+                _bm25BacklogSearch.BuildIndex(_semanticSearch.GetCacheEntries(false));
 
                 txtSemanticSearch.IsEnabled = true;
                 lblCacheStatus.Text = $"Ready — {_semanticSearch.CachedItemCount} items indexed (rebuilt, Semantic + BM25)";
