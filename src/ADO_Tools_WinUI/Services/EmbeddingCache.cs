@@ -98,7 +98,7 @@ namespace ADO_Tools_WinUI.Services
             return needsEmbedding;
         }
 
-        public void AddOrUpdate(WorkItemDto wi, List<float[]> embeddings)
+        public void AddOrUpdate(WorkItemDto wi, List<float[]> embeddings, string? searchableText = null)
         {
             string changedDate = wi.Fields.TryGetValue("System.ChangedDate", out var cd) ? cd?.ToString() ?? "" : "";
 
@@ -113,6 +113,7 @@ namespace ADO_Tools_WinUI.Services
                 IterationPath = wi.IterationPath ?? "",
                 HtmlUrl = wi.HtmlUrl ?? "",
                 ChangedDate = changedDate,
+                SearchableText = searchableText,
                 Embedding = embeddings[0],
                 ExtraEmbeddings = embeddings.Count > 1 ? embeddings.Skip(1).ToList() : null
             };

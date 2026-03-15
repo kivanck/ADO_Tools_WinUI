@@ -288,7 +288,7 @@ namespace ADO_Tools_WinUI.Services
                         var wi = needsEmbedding[i];
                         string text = BuildSearchableText(wi);
                         var chunkedEmbeddings = _embedder.GetChunkedEmbeddings(text);
-                        _cache.AddOrUpdate(wi, chunkedEmbeddings);
+                        _cache.AddOrUpdate(wi, chunkedEmbeddings, text);
 
                         progressCallback?.Invoke(i + 1, needsEmbedding.Count);
                     }
@@ -367,7 +367,7 @@ namespace ADO_Tools_WinUI.Services
             return $"{string.Join(". ", expansions)}. {query}";
         }
 
-        private static string BuildSearchableText(WorkItemDto wi)
+        internal static string BuildSearchableText(WorkItemDto wi)
         {
             var parts = new List<string>();
 
@@ -398,7 +398,7 @@ namespace ADO_Tools_WinUI.Services
             return string.Join(". ", parts);
         }
 
-        private static string StripHtml(string html)
+        internal static string StripHtml(string html)
         {
             if (string.IsNullOrEmpty(html)) return "";
             return Regex.Replace(html, "<.*?>", " ").Trim();
@@ -407,6 +407,11 @@ namespace ADO_Tools_WinUI.Services
         public bool IsReady => _cache != null && _cache.Count > 0;
 
         public int CachedItemCount => _cache?.Count ?? 0;
+
+        public List<EmbeddingCacheEntry> GetCacheEntries(bool excludeDone)
+        {
+            return _cache?.GetEntries(excludeDone) ?? new List<EmbeddingCacheEntry>();
+        }
 
         public void Dispose() => _embedder?.Dispose();
     }

@@ -26,6 +26,7 @@ namespace ADO_Tools_WinUI.Pages
         private List<WorkItemDto> _workItemList = new();
         private readonly ObservableCollection<WorkItemRow> _rows = new();
         private SemanticSearchService? _semanticSearch;
+        private Bm25SearchService? _bm25Search;
         private ListMode _listMode = ListMode.Query;
         private string _lastQueryName = "";
         private string _lastSearchQuery = "";
@@ -299,6 +300,20 @@ namespace ADO_Tools_WinUI.Pages
             foreach (var row in selected)
             {
                 var workItem = _workItemList.FirstOrDefault(w => w.Id == row.Id);
+
+                // If item came from search (not in _workItemList), fetch it from the API
+                if (workItem == null)
+                {
+                    try
+                    {
+                        workItem = await _tfsRest.GetWorkItemAsync(row.Id);
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Failed to fetch work item #{row.Id}: {ex.Message}");
+                    }
+                }
+
                 if (workItem == null) continue;
 
                 string sizeText = CalculateAttachmentSize(workItem);
@@ -602,8 +617,11 @@ namespace ADO_Tools_WinUI.Pages
                             lblCacheStatus.Text = $"Embedding {current}/{total}…");
                     });
 
+                _bm25Search = new Bm25SearchService();
+                _bm25Search.BuildIndex(_semanticSearch.GetCacheEntries(false));
+
                 txtSemanticSearch.IsEnabled = true;
-                lblCacheStatus.Text = $"Ready — {_semanticSearch.CachedItemCount} items indexed";
+                lblCacheStatus.Text = $"Ready — {_semanticSearch.CachedItemCount} items indexed (Semantic + BM25)";
             }
             catch (Exception ex)
             {
@@ -629,9 +647,21 @@ namespace ADO_Tools_WinUI.Pages
             btnBuildIndex.IsEnabled = true;
         }
 
+        private void CmbSearchMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (txtSemanticSearch == null) return;
+            txtSemanticSearch.PlaceholderText = cmbSearchMode.SelectedIndex == 1
+                ? "Search by keywords \u2014 e.g. 'cant points'\u2026"
+                : "Search by meaning \u2014 e.g. 'crash when opening large files'\u2026";
+        }
+
         private async void TxtSemanticSearch_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
         {
-            await RunSemanticSearchAsync();
+            bool useKeyword = cmbSearchMode.SelectedIndex == 1;
+            if (useKeyword)
+                await RunBm25SearchAsync();
+            else
+                await RunSemanticSearchAsync();
         }
 
         private async Task RunSemanticSearchAsync()
@@ -675,6 +705,52 @@ namespace ADO_Tools_WinUI.Pages
             _listMode = ListMode.Search;
             _lastSearchQuery = query;
             lblItemCount.Text = $"{results.Count} matches";
+            UpdateContextBadge();
+            progressBar.IsIndeterminate = false;
+            progressBar.Visibility = Visibility.Collapsed;
+        }
+
+        private async Task RunBm25SearchAsync()
+        {
+            if (_bm25Search == null || _bm25Search.DocumentCount == 0) return;
+
+            string query = txtSemanticSearch.Text?.Trim() ?? "";
+            if (string.IsNullOrEmpty(query))
+            {
+                BtnClearSearch_Click(null!, null!);
+                return;
+            }
+
+            progressBar.IsIndeterminate = true;
+            progressBar.Visibility = Visibility.Visible;
+
+            bool excludeDone = chkExcludeDone.IsChecked == true;
+            int topN = (int)numTopResults.Value;
+
+            var results = await Task.Run(() =>
+                _bm25Search.Search(query, topN, excludeDone));
+
+            _rows.Clear();
+            foreach (var r in results)
+            {
+                var entry = r.CacheEntry;
+                _rows.Add(new WorkItemRow
+                {
+                    Id = entry.WorkItemId,
+                    Title = $"[{r.Score:F1}] {entry.Title}",
+                    State = entry.State,
+                    CreatedBy = entry.CreatedBy,
+                    CreatedDate = entry.CreatedDate,
+                    CreatedDateShort = entry.CreatedDate.ToShortDateString(),
+                    TypeName = entry.TypeName,
+                    IterationShort = (entry.IterationPath ?? "").Replace("Civil Design\\Civil Designer Products\\", ""),
+                    HtmlUrl = entry.HtmlUrl ?? ""
+                });
+            }
+
+            _listMode = ListMode.Search;
+            _lastSearchQuery = query;
+            lblItemCount.Text = $"{results.Count} matches (BM25)";
             UpdateContextBadge();
             progressBar.IsIndeterminate = false;
             progressBar.Visibility = Visibility.Collapsed;
@@ -755,8 +831,11 @@ namespace ADO_Tools_WinUI.Pages
                             lblCacheStatus.Text = $"Embedding {current}/{total}…");
                     });
 
+                _bm25Search = new Bm25SearchService();
+                _bm25Search.BuildIndex(_semanticSearch.GetCacheEntries(false));
+
                 txtSemanticSearch.IsEnabled = true;
-                lblCacheStatus.Text = $"Ready — {_semanticSearch.CachedItemCount} items indexed (rebuilt)";
+                lblCacheStatus.Text = $"Ready — {_semanticSearch.CachedItemCount} items indexed (rebuilt, Semantic + BM25)";
             }
             catch (Exception ex)
             {

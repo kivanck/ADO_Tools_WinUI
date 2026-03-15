@@ -192,23 +192,33 @@ mc:Ignorable="d">
                     <!-- Search box & options -->
                     <Grid ColumnSpacing="10">
                         <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
+                        <ComboBox x:Name="cmbSearchMode"
+                                  Grid.Column="0"
+                                  SelectedIndex="0" Width="180"
+                                  VerticalAlignment="Center"
+                                  ToolTipService.ToolTip="Semantic uses AI embeddings; Keyword uses BM25 word matching"
+                                  SelectionChanged="CmbSearchMode_SelectionChanged">
+                            <ComboBoxItem Content="Semantic" />
+                            <ComboBoxItem Content="Keyword (BM25)" />
+                        </ComboBox>
                         <AutoSuggestBox x:Name="txtSemanticSearch"
-                                        Grid.Column="0"
+                                        Grid.Column="1"
                                         PlaceholderText="Search by meaning — e.g. 'crash when opening large files'…"
                                         QueryIcon="Find"
                                         IsEnabled="False"
                                         QuerySubmitted="TxtSemanticSearch_QuerySubmitted" />
                         <CheckBox x:Name="chkExcludeDone"
-                                  Grid.Column="1"
+                                  Grid.Column="2"
                                   Content="Exclude Done"
                                   IsChecked="True"
                                   VerticalAlignment="Center" />
-                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6"
+                        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6"
                                     VerticalAlignment="Center">
                             <TextBlock Text="Top"
                                        Style="{StaticResource CaptionTextBlockStyle}"
@@ -219,7 +229,7 @@ mc:Ignorable="d">
                                        Width="100" />
                         </StackPanel>
                         <Button x:Name="btnClearSearch"
-                                Grid.Column="3" Height="32"
+                                Grid.Column="4" Height="32"
                                 ToolTipService.ToolTip="Clear search and show query results"
                                 Click="BtnClearSearch_Click">
                             <FontIcon Glyph="&#xE894;" FontSize="14" />

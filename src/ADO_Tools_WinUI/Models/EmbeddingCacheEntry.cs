@@ -16,6 +16,13 @@ namespace ADO_Tools.Models
         public string ChangedDate { get; set; } = "";
 
         /// <summary>
+        /// Plain-text content used for keyword (BM25) search.
+        /// Built from Title + Description + ReproSteps + Comments etc.
+        /// Null for entries created before this field was added.
+        /// </summary>
+        public string? SearchableText { get; set; }
+
+        /// <summary>
         /// Primary embedding (first chunk, or the single embedding for short items).
         /// Kept for backward compatibility with existing cache files.
         /// </summary>
