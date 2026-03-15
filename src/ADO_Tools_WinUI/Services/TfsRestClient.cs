@@ -168,6 +168,11 @@ namespace ADO_Tools.Services
 
         private static WorkItemDto ParseWorkItem(JToken wi)
         {
+            // ?? 1. Core typed properties ????????????????????????????????
+            // These are stored as typed properties on WorkItemDto and persisted
+            // into EmbeddingCacheEntry / QueryCacheEntry for backlog & query search.
+            // They provide the minimal metadata needed for display and caching.
+
             DateTime createdDate = DateTime.MinValue;
             var createdDateStr = wi["fields"]?["System.CreatedDate"]?.ToString();
             if (!string.IsNullOrEmpty(createdDateStr)) DateTime.TryParse(createdDateStr, out createdDate);
@@ -185,10 +190,14 @@ namespace ADO_Tools.Services
                 HtmlUrl = wi["_links"]?["html"]?["href"]?.ToString()
             };
 
-            // Store ChangedDate for incremental cache updates
+            // ?? 2. ChangedDate for incremental cache updates ????????????
+            // Used by EmbeddingCache and QuerySearchCache to detect whether
+            // a work item has been modified since the last cache build.
             dto.Fields["System.ChangedDate"] = wi["fields"]?["System.ChangedDate"]?.ToString() ?? "";
 
-            // Capture rich-text fields for semantic search
+            // ?? 3. Rich-text fields for semantic / BM25 search ??????????
+            // These HTML-heavy fields are stripped to plain text and combined
+            // into SearchableText by SemanticSearchService.BuildSearchableText().
             string[] searchFields =
             {
                 "System.Description",
@@ -209,6 +218,37 @@ namespace ADO_Tools.Services
                     dto.Fields[fieldName] = val;
             }
 
+            // ?? 4. All remaining fields for dynamic query column display ?
+            // The ADO API returns every field in the JSON response. This loop
+            // captures anything not already stored above, so that when a query
+            // defines columns like AssignedTo, Priority, Tags, etc., the values
+            // are available in dto.Fields ? WorkItemRow.FieldValues ? DataGrid.
+            if (wi["fields"] is JObject allFields)
+            {
+                foreach (var prop in allFields.Properties())
+                {
+                    if (dto.Fields.ContainsKey(prop.Name))
+                        continue;
+
+                    var token = prop.Value;
+
+                    // Person/identity fields are JSON objects — extract displayName
+                    if (token.Type == JTokenType.Object)
+                    {
+                        var displayName = token["displayName"]?.ToString();
+                        if (!string.IsNullOrEmpty(displayName))
+                            dto.Fields[prop.Name] = displayName;
+                    }
+                    else if (token.Type != JTokenType.Null)
+                    {
+                        var val = token.ToString();
+                        if (!string.IsNullOrEmpty(val))
+                            dto.Fields[prop.Name] = val;
+                    }
+                }
+            }
+
+            // Extract file attachment URLs and names for the download feature.
             if (wi["relations"] != null)
             {
                 foreach (var rel in wi["relations"])

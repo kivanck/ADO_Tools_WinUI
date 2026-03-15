@@ -9,9 +9,11 @@ using ADO_Tools.Models;
 using ADO_Tools.Services;
 using ADO_Tools.Utilities;
 using ADO_Tools_WinUI.Services;
+using CommunityToolkit.WinUI.UI.Controls;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Media;
 using Windows.Storage.Pickers;
 
@@ -76,7 +78,7 @@ namespace ADO_Tools_WinUI.Pages
             txtProjectName.Text = s.Project;
             txtRootFolder.Text = s.RootFolder;
             txtAreaPath.Text = s.SearchAreaPath;
-            listWorkItems.ItemsSource = _rows;
+            dataGridWorkItems.ItemsSource = _rows;
         }
 
         // ?? View Model Row ??????????????????????????????????????????????
@@ -200,9 +202,9 @@ namespace ADO_Tools_WinUI.Pages
                 row.RowBackground = recent ? highlightBrush : null;
             }
 
-            // Force refresh by reassigning source
-            listWorkItems.ItemsSource = null;
-            listWorkItems.ItemsSource = _rows;
+            // Force DataGrid to re-read the collection
+            dataGridWorkItems.ItemsSource = null;
+            dataGridWorkItems.ItemsSource = _rows;
         }
 
         private List<WorkItemRow> BuildRows(List<WorkItemDto> items)
@@ -288,7 +290,7 @@ namespace ADO_Tools_WinUI.Pages
         }
 
         /// <summary>
-        /// Rebuilds the ListView header and item templates to match the given column list.
+        /// Rebuilds the DataGrid columns to match the given column list.
         /// Falls back to default columns when columns is empty (backlog search mode).
         /// </summary>
         private void ApplyDynamicColumns(List<string> columns)
@@ -296,78 +298,53 @@ namespace ADO_Tools_WinUI.Pages
             if (columns.Count == 0)
                 columns = DefaultColumns;
 
-            var colDefs = string.Join("\n",
-                columns.Select(c =>
-                {
-                    if (c == "System.Id") return "<ColumnDefinition Width='70' />";
-                    if (c == "System.Title") return "<ColumnDefinition Width='*' />";
-                    return "<ColumnDefinition Width='Auto' MinWidth='80' />";
-                }));
+            dataGridWorkItems.Columns.Clear();
 
-            var headers = string.Join("\n",
-                columns.Select((c, i) =>
-                {
-                    string name = FieldDisplayNames.TryGetValue(c, out var display) ? display : c.Split('.').Last();
-                    return $"<TextBlock Grid.Column='{i}' Text='{EscapeXml(name)}' FontWeight='SemiBold' />";
-                }));
-
-            string headerXaml = $@"<DataTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'>
-                <Grid Padding='12,8' ColumnSpacing='8'>
-                    <Grid.ColumnDefinitions>{colDefs}</Grid.ColumnDefinitions>
-                    {headers}
-                </Grid>
-            </DataTemplate>";
-
-            listWorkItems.HeaderTemplate = (DataTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(headerXaml);
-
-            // Build item template — bind known fields directly, others via FieldValues
-            var cells = string.Join("\n",
-                columns.Select((c, i) =>
-                {
-                    string trimming = c == "System.Title" || c == "System.IterationPath"
-                        ? " TextTrimming='CharacterEllipsis'" : "";
-
-                    string binding = c switch
-                    {
-                        "System.Id" => "{Binding Id}",
-                        "System.Title" => "{Binding Title}",
-                        "System.State" => "{Binding State}",
-                        "System.CreatedBy" => "{Binding CreatedBy}",
-                        "System.CreatedDate" => "{Binding CreatedDateShort}",
-                        "System.WorkItemType" => "{Binding TypeName}",
-                        "System.IterationPath" => "{Binding IterationShort}",
-                        _ => ""
-                    };
-
-                    if (!string.IsNullOrEmpty(binding))
-                        return $"<TextBlock Grid.Column='{i}' Text='{binding}'{trimming} />";
-
-                    // For dynamic fields, bind via FieldValues indexer
-                    return $"<TextBlock Grid.Column='{i}' Text='{{Binding FieldValues[{EscapeXml(c)}]}}'{trimming} />";
-                }));
-
-            string itemColDefs = string.Join("", columns.Select(c =>
+            foreach (var fieldRef in columns)
             {
-                if (c == "System.Id") return "<ColumnDefinition Width='70' />";
-                if (c == "System.Title") return "<ColumnDefinition Width='*' />";
-                return "<ColumnDefinition Width='Auto' MinWidth='80' />";
-            }));
+                string header = FieldDisplayNames.TryGetValue(fieldRef, out var display)
+                    ? display
+                    : fieldRef.Split('.').Last();
 
-            string itemXaml = $@"<DataTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'>
-                <Grid Padding='12,6' ColumnSpacing='8' Background='{{Binding RowBackground}}'>
-                    <Grid.ColumnDefinitions>{itemColDefs}</Grid.ColumnDefinitions>
-                    {cells}
-                </Grid>
-            </DataTemplate>";
+                // Map well-known fields to typed properties, others to FieldValues indexer
+                string bindingPath = fieldRef switch
+                {
+                    "System.Id" => "Id",
+                    "System.Title" => "Title",
+                    "System.State" => "State",
+                    "System.CreatedBy" => "CreatedBy",
+                    "System.CreatedDate" => "CreatedDateShort",
+                    "System.WorkItemType" => "TypeName",
+                    "System.IterationPath" => "IterationShort",
+                    _ => $"FieldValues[{fieldRef}]"
+                };
 
-            listWorkItems.ItemTemplate = (DataTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(itemXaml);
-        }
+                var col = new DataGridTextColumn
+                {
+                    Header = header,
+                    Binding = new Binding { Path = new PropertyPath(bindingPath) },
+                    CanUserResize = true,
+                    CanUserSort = true,
+                };
 
-        private static string EscapeXml(string text)
-        {
-            return text.Replace("&", "&amp;").Replace("<", "&lt;")
-                       .Replace(">", "&gt;").Replace("'", "&apos;")
-                       .Replace("\"", "&quot;");
+                // Set sensible default widths
+                if (fieldRef == "System.Id")
+                    col.Width = new DataGridLength(70);
+                else if (fieldRef == "System.Title")
+                    col.Width = new DataGridLength(1, DataGridLengthUnitType.Star);
+                else if (fieldRef == "System.State" || fieldRef == "System.CreatedDate" || fieldRef == "System.ChangedDate")
+                    col.Width = new DataGridLength(90);
+                else if (fieldRef == "System.CreatedBy" || fieldRef == "System.AssignedTo" || fieldRef == "System.ChangedBy")
+                    col.Width = new DataGridLength(130);
+                else if (fieldRef == "System.WorkItemType")
+                    col.Width = new DataGridLength(100);
+                else if (fieldRef == "System.IterationPath" || fieldRef == "System.AreaPath")
+                    col.Width = new DataGridLength(1, DataGridLengthUnitType.Star);
+                else
+                    col.Width = new DataGridLength(120);
+
+                dataGridWorkItems.Columns.Add(col);
+            }
         }
 
         /// <summary>
@@ -524,7 +501,7 @@ namespace ADO_Tools_WinUI.Pages
         private async void BtnDownloadSelected_Click(object sender, RoutedEventArgs e)
         {
             if (_tfsRest == null) return;
-            var selected = listWorkItems.SelectedItems.OfType<WorkItemRow>().ToList();
+            var selected = dataGridWorkItems.SelectedItems.OfType<WorkItemRow>().ToList();
             if (selected.Count == 0)
             {
                 ShowMessage("Select one or more work items first.");
@@ -637,7 +614,7 @@ namespace ADO_Tools_WinUI.Pages
         {
             if (_tfsRest == null || _queryList.Count == 0) return;
 
-            var selected = listWorkItems.SelectedItems.OfType<WorkItemRow>().FirstOrDefault();
+            var selected = dataGridWorkItems.SelectedItems.OfType<WorkItemRow>().FirstOrDefault();
             if (selected == null)
             {
                 ShowMessage("Select a work item to compare.");
@@ -771,9 +748,55 @@ namespace ADO_Tools_WinUI.Pages
                 HighlightRows();
         }
 
-        private void ListWorkItems_DoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
+        private void DataGridWorkItems_Sorting(object sender, DataGridColumnEventArgs e)
         {
-            if (listWorkItems.SelectedItem is not WorkItemRow row) return;
+            var column = e.Column;
+            var direction = column.SortDirection == DataGridSortDirection.Ascending
+                ? DataGridSortDirection.Descending
+                : DataGridSortDirection.Ascending;
+
+            // Clear sort indicators on all other columns
+            foreach (var col in dataGridWorkItems.Columns)
+            {
+                if (col != column)
+                    col.SortDirection = null;
+            }
+            column.SortDirection = direction;
+
+            // Determine the property/field to sort by from the column's binding path
+            string sortTag = (column as DataGridBoundColumn)?.Binding is Binding b
+                ? b.Path.Path
+                : "";
+
+            var sorted = direction == DataGridSortDirection.Ascending
+                ? _rows.OrderBy(r => GetSortValue(r, sortTag)).ToList()
+                : _rows.OrderByDescending(r => GetSortValue(r, sortTag)).ToList();
+
+            _rows.Clear();
+            foreach (var row in sorted)
+                _rows.Add(row);
+        }
+
+        private static object GetSortValue(WorkItemRow row, string path)
+        {
+            return path switch
+            {
+                "Id" => row.Id,
+                "Title" => row.Title,
+                "State" => row.State,
+                "CreatedBy" => row.CreatedBy,
+                "CreatedDateShort" => row.CreatedDate,
+                "TypeName" => row.TypeName,
+                "IterationShort" => row.IterationShort,
+                _ when path.StartsWith("FieldValues[") =>
+                    row.FieldValues.TryGetValue(path[12..^1], out var v) ? v : "",
+                _ => row.Id
+            };
+        }
+
+        private void DataGridWorkItems_DoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
+        {
+            if (dataGridWorkItems.SelectedItem is not WorkItemRow row) return;
             if (string.IsNullOrEmpty(row.HtmlUrl)) return;
 
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
@@ -781,11 +804,6 @@ namespace ADO_Tools_WinUI.Pages
                 FileName = row.HtmlUrl,
                 UseShellExecute = true
             });
-        }
-
-        private void ListWorkItems_ItemClick(object sender, ItemClickEventArgs e)
-        {
-            // Selection handled by ListView built-in selection
         }
 
         private async void BtnBrowseFolder_Click(object sender, RoutedEventArgs e)
