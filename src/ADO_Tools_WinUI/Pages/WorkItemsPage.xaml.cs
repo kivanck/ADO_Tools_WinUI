@@ -21,7 +21,7 @@ namespace ADO_Tools_WinUI.Pages
 {
     public sealed partial class WorkItemsPage : Page
     {
-        private enum ListMode { Query, SearchQuery, SearchBacklog }
+        private enum ListMode { Query, SearchQuery, SearchBacklog, Compare }
 
         private TfsRestClient? _tfsRest;
         private List<QueryDto> _queryList = new();
@@ -34,6 +34,7 @@ namespace ADO_Tools_WinUI.Pages
         private ListMode _listMode = ListMode.Query;
         private string _lastQueryName = "";
         private string _lastSearchQuery = "";
+        private string _lastCompareSource = "";
         private List<string> _queryColumns = [];
 
         // Friendly display names for ADO field reference names
@@ -130,6 +131,13 @@ namespace ADO_Tools_WinUI.Pages
                     lblContextBadge.Text = string.IsNullOrEmpty(_lastSearchQuery)
                         ? "Backlog Search Results"
                         : $"Backlog Search: \u201c{_lastSearchQuery}\u201d";
+                    break;
+                case ListMode.Compare:
+                    badgeIcon.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 202, 80, 16));
+                    badgeGlyph.Glyph = "\uE721";
+                    lblContextBadge.Text = string.IsNullOrEmpty(_lastCompareSource)
+                        ? "Compare Results"
+                        : $"Similar to: {_lastCompareSource}";
                     break;
             }
         }
@@ -347,32 +355,6 @@ namespace ADO_Tools_WinUI.Pages
             }
         }
 
-        /// <summary>
-        /// Builds the BM25 query search cache for the current query results.
-        /// Loads existing cache, only re-processes new/changed items.
-        /// </summary>
-        private async Task BuildQuerySearchIndexAsync(string queryId, List<WorkItemDto> items)
-        {
-            string cacheDir = Path.Combine(AppContext.BaseDirectory, "QueryCache");
-            _querySearchCache = new QuerySearchCache(queryId, cacheDir);
-            _querySearchCache.TryLoad();
-
-            var needsUpdate = _querySearchCache.GetItemsNeedingUpdate(items);
-
-            if (needsUpdate.Count > 0)
-            {
-                foreach (var wi in needsUpdate)
-                {
-                    string searchText = SemanticSearchService.BuildSearchableText(wi);
-                    _querySearchCache.AddOrUpdate(wi, searchText);
-                }
-                await _querySearchCache.SaveAsync();
-            }
-
-            _bm25QuerySearch = new Bm25SearchService();
-            _bm25QuerySearch.BuildIndex(_querySearchCache.GetAsBm25Entries());
-        }
-
         // ?? Event Handlers ??????????????????????????????????????????????
 
         private async void BtnConnect_Click(object sender, RoutedEventArgs e)
@@ -452,10 +434,47 @@ namespace ADO_Tools_WinUI.Pages
 
             try
             {
-                var result = await _tfsRest.QueryWorkItemsAsync(wiql);
-                _workItemList = result.WorkItems;
-                _queryColumns = result.Columns;
-                q.Columns = result.Columns;
+                // Step 1: Execute query to get IDs and column definitions (fast, no data fetch)
+                var queryResult = await _tfsRest.ExecuteQueryAsync(wiql);
+                _queryColumns = queryResult.Columns;
+                q.Columns = queryResult.Columns;
+                var allIds = queryResult.WorkItemIds;
+
+                if (allIds.Count == 0)
+                {
+                    _workItemList = new List<WorkItemDto>();
+                }
+                else if (!string.IsNullOrEmpty(q.Id))
+                {
+                    // Step 2: Load cache and get lightweight ChangedDates from API
+                    string cacheDir = Path.Combine(AppContext.BaseDirectory, "QueryCache");
+                    _querySearchCache = new QuerySearchCache(q.Id, cacheDir);
+                    _querySearchCache.TryLoad();
+
+                    lblItemCount.Text = $"Checking {allIds.Count} items…";
+                    var freshChangedDates = await _tfsRest.FetchWorkItemChangedDatesAsync(allIds);
+
+                    // Step 3: Determine which items need a full re-fetch
+                    var idsToFetch = _querySearchCache.GetIdsNeedingFetch(allIds, freshChangedDates);
+
+                    // Step 4: Fetch only new/changed items
+                    if (idsToFetch.Count > 0)
+                    {
+                        lblItemCount.Text = $"Fetching {idsToFetch.Count} of {allIds.Count} items…";
+                        var freshItems = await _tfsRest.FetchWorkItemsByIdsAsync(idsToFetch);
+                        _querySearchCache.MergeFullItems(freshItems);
+                        await _querySearchCache.SaveAsync();
+                    }
+
+                    // Step 5: Reconstruct the full work item list from cache (in query order)
+                    _workItemList = _querySearchCache.GetCachedWorkItems(allIds);
+                }
+                else
+                {
+                    // No query ID — fall back to full fetch (no caching possible)
+                    var fullResult = await _tfsRest.QueryWorkItemsAsync(wiql);
+                    _workItemList = fullResult.WorkItems;
+                }
             }
             catch (Exception ex)
             {
@@ -483,10 +502,11 @@ namespace ADO_Tools_WinUI.Pages
                 lblItemCount.Text = $"{_workItemList.Count} items";
                 HighlightRows();
 
-                // Build BM25 search index for this query (incremental, cached per query)
-                if (!string.IsNullOrEmpty(q.Id))
+                // Build BM25 search index from the already-loaded cache
+                if (_querySearchCache != null)
                 {
-                    await BuildQuerySearchIndexAsync(q.Id, _workItemList);
+                    _bm25QuerySearch = new Bm25SearchService();
+                    _bm25QuerySearch.BuildIndex(_querySearchCache.GetAsBm25Entries());
                     txtQuerySearch.IsEnabled = true;
                     lblItemCount.Text = $"{_workItemList.Count} items (searchable)";
                 }
@@ -621,21 +641,44 @@ namespace ADO_Tools_WinUI.Pages
                 return;
             }
 
+            // Look up the full work item; fetch from API if not in _workItemList (e.g. search results)
             var workItem = _workItemList.FirstOrDefault(w => w.Id == selected.Id);
-            if (workItem == null) return;
+            if (workItem == null)
+            {
+                try
+                {
+                    workItem = await _tfsRest.GetWorkItemAsync(selected.Id);
+                }
+                catch (Exception ex)
+                {
+                    ShowMessage($"Failed to fetch work item #{selected.Id}: {ex.Message}", "Error");
+                    return;
+                }
+            }
+            if (workItem == null)
+            {
+                ShowMessage($"Work item #{selected.Id} not found.");
+                return;
+            }
 
             // Ask user which query to compare against
             var queryCmb = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, PlaceholderText = "Select query" };
-            foreach (var q in _queryList)
-                queryCmb.Items.Add(new ComboBoxItem { Content = q.Path });
-            if (queryCmb.Items.Count > 0) queryCmb.SelectedIndex = 0;
-
-            var topNBox = new NumberBox { Header = "Show top matches", Value = 20, Minimum = 1, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact, Width = 150 };
+            int defaultIndex = 0;
+            for (int i = 0; i < _queryList.Count; i++)
+            {
+                queryCmb.Items.Add(new ComboBoxItem { Content = _queryList[i].Path });
+                // Default to the currently selected query in the main combo box
+                if (cmbQueries.SelectedItem is ComboBoxItem currentItem
+                    && (string)currentItem.Content == _queryList[i].Path)
+                {
+                    defaultIndex = i;
+                }
+            }
+            if (queryCmb.Items.Count > 0) queryCmb.SelectedIndex = defaultIndex;
 
             var panel = new StackPanel { Spacing = 12 };
             panel.Children.Add(new TextBlock { Text = $"Finding items similar to #{workItem.Id}: {workItem.Title}", TextWrapping = TextWrapping.Wrap });
             panel.Children.Add(queryCmb);
-            panel.Children.Add(topNBox);
 
             var setupDialog = new ContentDialog
             {
@@ -683,63 +726,35 @@ namespace ADO_Tools_WinUI.Pages
                     matches.Add((candidate, score));
             }
 
-            matches = matches.OrderByDescending(m => m.Score).Take((int)topNBox.Value).ToList();
+            matches = matches.OrderByDescending(m => m.Score).ToList();
+
+            // Show results in the main DataGrid
+            ApplyDynamicColumns([]);
+            _rows.Clear();
+
+            // Source item first with a [Source] tag
+            var sourceRow = BuildRow(workItem);
+            sourceRow.Title = $"[Source] {sourceRow.Title}";
+            sourceRow.FieldValues["System.Title"] = sourceRow.Title;
+            sourceRow.RowBackground = new SolidColorBrush(Windows.UI.Color.FromArgb(40, 202, 80, 16));
+            _rows.Add(sourceRow);
+
+            // Matched items with score prefix
+            foreach (var (item, score) in matches)
+            {
+                var matchRow = BuildRow(item);
+                matchRow.Title = $"[{score}] {matchRow.Title}";
+                matchRow.FieldValues["System.Title"] = matchRow.Title;
+                _rows.Add(matchRow);
+            }
+
+            _listMode = ListMode.Compare;
+            _lastCompareSource = $"#{workItem.Id} {workItem.Title}";
+            lblItemCount.Text = $"{matches.Count} similar items";
+            UpdateContextBadge();
 
             progressBar.IsIndeterminate = false;
             progressBar.Visibility = Visibility.Collapsed;
-
-            // Show results in a dialog
-            var resultList = new ListView { SelectionMode = ListViewSelectionMode.None, MaxHeight = 400 };
-            resultList.HeaderTemplate = (DataTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(
-                @"<DataTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'>
-                    <Grid Padding='8,4' ColumnSpacing='8'>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width='50'/>
-                            <ColumnDefinition Width='60'/>
-                            <ColumnDefinition Width='*'/>
-                            <ColumnDefinition Width='80'/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column='0' Text='Score' FontWeight='SemiBold'/>
-                        <TextBlock Grid.Column='1' Text='ID' FontWeight='SemiBold'/>
-                        <TextBlock Grid.Column='2' Text='Title' FontWeight='SemiBold'/>
-                        <TextBlock Grid.Column='3' Text='State' FontWeight='SemiBold'/>
-                    </Grid>
-                </DataTemplate>");
-
-            foreach (var (item, score) in matches)
-            {
-                var row = new Grid { Padding = new Thickness(8, 4, 8, 4), ColumnSpacing = 8 };
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(50) });
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) });
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
-
-                var tbScore = new TextBlock { Text = score.ToString() };
-                Grid.SetColumn(tbScore, 0);
-                var tbId = new TextBlock { Text = item.Id.ToString() };
-                Grid.SetColumn(tbId, 1);
-                var tbTitle = new TextBlock { Text = item.Title ?? "", TextTrimming = TextTrimming.CharacterEllipsis };
-                Grid.SetColumn(tbTitle, 2);
-                var tbState = new TextBlock { Text = item.State ?? "" };
-                Grid.SetColumn(tbState, 3);
-
-                row.Children.Add(tbScore);
-                row.Children.Add(tbId);
-                row.Children.Add(tbTitle);
-                row.Children.Add(tbState);
-                resultList.Items.Add(row);
-            }
-
-            if (matches.Count == 0)
-                resultList.Items.Add(new TextBlock { Text = "No matches found." });
-
-            await new ContentDialog
-            {
-                Title = $"Similar Items (top {matches.Count})",
-                Content = resultList,
-                CloseButtonText = "Close",
-                XamlRoot = this.XamlRoot
-            }.ShowAsync();
         }
 
         private void NumHighlightDays_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)

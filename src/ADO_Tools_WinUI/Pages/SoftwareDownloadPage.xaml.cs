@@ -742,14 +742,15 @@ namespace ADO_Tools_WinUI.Pages
                 {
                     DispatcherQueue.TryEnqueue(() =>
                     {
-                        if ((msg.StartsWith("Windows Installer is running.", StringComparison.OrdinalIgnoreCase)
-                            && logBlock.Text.Contains("Windows Uninstaller is running.")))
-                            
+                        if (msg.StartsWith("Windows Installer is running.", StringComparison.OrdinalIgnoreCase)
+                            || msg.StartsWith("Windows Uninstaller is running.", StringComparison.OrdinalIgnoreCase))
                         {
                             var lines = logBlock.Text.Split(Environment.NewLine).ToList();
-                            int idx = lines.FindLastIndex(l => l.StartsWith("Windows Installer is running.")|| l.StartsWith("Windows Uninstaller is running."));
+                            int idx = lines.FindLastIndex(l => l.StartsWith("Windows Installer is running.") || l.StartsWith("Windows Uninstaller is running."));
                             if (idx >= 0)
                                 lines[idx] = msg;
+                            else
+                                lines.Add(msg);
                             logBlock.Text = string.Join(Environment.NewLine, lines);
                         }
                         else

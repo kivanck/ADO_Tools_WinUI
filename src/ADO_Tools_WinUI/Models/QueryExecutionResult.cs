@@ -8,6 +8,7 @@ namespace ADO_Tools.Models
     /// </summary>
     public class QueryExecutionResult
     {
+        public List<int> WorkItemIds { get; set; } = [];
         public List<WorkItemDto> WorkItems { get; set; } = [];
         public List<string> Columns { get; set; } = [];
     }

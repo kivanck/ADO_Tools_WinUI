@@ -117,6 +117,143 @@ namespace ADO_Tools_WinUI.Services
         }
 
         /// <summary>
+        /// Returns a map of WorkItemId ? ChangedDate for all cached entries.
+        /// Used to compare against lightweight API results to determine which items need re-fetching.
+        /// </summary>
+        public Dictionary<int, string> GetChangedDateMap()
+        {
+            return _entries.ToDictionary(e => e.Key, e => e.Value.ChangedDate);
+        }
+
+        /// <summary>
+        /// Given the full set of IDs from the query and a map of Id ? ChangedDate from the API,
+        /// returns the list of IDs that need a full re-fetch (new or changed).
+        /// Also removes stale entries no longer in the query.
+        /// </summary>
+        public List<int> GetIdsNeedingFetch(List<int> freshIds, Dictionary<int, string> freshChangedDates)
+        {
+            var freshIdSet = new HashSet<int>(freshIds);
+
+            // Remove items no longer in query results
+            var staleIds = _entries.Keys.Where(id => !freshIdSet.Contains(id)).ToList();
+            foreach (var id in staleIds)
+                _entries.Remove(id);
+
+            var needsFetch = new List<int>();
+            foreach (var id in freshIds)
+            {
+                string freshChanged = freshChangedDates.TryGetValue(id, out var cd) ? cd : "";
+                if (!_entries.TryGetValue(id, out var existing) || existing.ChangedDate != freshChanged)
+                    needsFetch.Add(id);
+            }
+            return needsFetch;
+        }
+
+        /// <summary>
+        /// Updates cache entries with full work item data from freshly fetched items.
+        /// </summary>
+        public void MergeFullItems(List<WorkItemDto> freshItems)
+        {
+            foreach (var wi in freshItems)
+            {
+                string changedDate = wi.Fields.TryGetValue("System.ChangedDate", out var cd)
+                    ? cd?.ToString() ?? "" : "";
+
+                // Serialize Fields dict (values are object, convert to string for cache)
+                var fieldStrings = new Dictionary<string, string>();
+                foreach (var kvp in wi.Fields)
+                    fieldStrings[kvp.Key] = kvp.Value?.ToString() ?? "";
+
+                var attachments = wi.Attachments.Select(a => new CachedAttachment
+                {
+                    Url = a.Url ?? "",
+                    FileName = a.FileName ?? "",
+                    Length = a.Length
+                }).ToList();
+
+                string searchText = SemanticSearchService.BuildSearchableText(wi);
+
+                if (_entries.TryGetValue(wi.Id, out var existing))
+                {
+                    // Update existing entry
+                    existing.Title = wi.Title ?? "";
+                    existing.State = wi.State ?? "";
+                    existing.TypeName = wi.TypeName ?? "";
+                    existing.CreatedBy = wi.CreatedBy ?? "";
+                    existing.CreatedDate = wi.CreatedDate;
+                    existing.IterationPath = wi.IterationPath ?? "";
+                    existing.HtmlUrl = wi.HtmlUrl ?? "";
+                    existing.ChangedDate = changedDate;
+                    existing.SearchableText = searchText;
+                    existing.Fields = fieldStrings;
+                    existing.Attachments = attachments;
+                }
+                else
+                {
+                    _entries[wi.Id] = new QueryCacheEntry
+                    {
+                        WorkItemId = wi.Id,
+                        Title = wi.Title ?? "",
+                        State = wi.State ?? "",
+                        TypeName = wi.TypeName ?? "",
+                        CreatedBy = wi.CreatedBy ?? "",
+                        CreatedDate = wi.CreatedDate,
+                        IterationPath = wi.IterationPath ?? "",
+                        HtmlUrl = wi.HtmlUrl ?? "",
+                        ChangedDate = changedDate,
+                        SearchableText = searchText,
+                        Fields = fieldStrings,
+                        Attachments = attachments
+                    };
+                }
+
+                if (DateTime.TryParse(changedDate, out var dt) && dt > LastUpdatedUtc)
+                    LastUpdatedUtc = dt;
+            }
+        }
+
+        /// <summary>
+        /// Reconstructs WorkItemDto objects from cache for the given IDs, preserving the order.
+        /// </summary>
+        public List<WorkItemDto> GetCachedWorkItems(List<int> orderedIds)
+        {
+            var result = new List<WorkItemDto>();
+            foreach (var id in orderedIds)
+            {
+                if (!_entries.TryGetValue(id, out var entry))
+                    continue;
+
+                var dto = new WorkItemDto
+                {
+                    Id = entry.WorkItemId,
+                    Title = entry.Title,
+                    State = entry.State,
+                    CreatedBy = entry.CreatedBy,
+                    CreatedDate = entry.CreatedDate,
+                    TypeName = entry.TypeName,
+                    IterationPath = entry.IterationPath,
+                    HtmlUrl = entry.HtmlUrl
+                };
+
+                // Restore Fields
+                foreach (var kvp in entry.Fields)
+                    dto.Fields[kvp.Key] = kvp.Value;
+
+                // Restore Attachments
+                foreach (var att in entry.Attachments)
+                    dto.Attachments.Add(new AttachmentDto
+                    {
+                        Url = att.Url,
+                        FileName = att.FileName,
+                        Length = att.Length
+                    });
+
+                result.Add(dto);
+            }
+            return result;
+        }
+
+        /// <summary>
         /// Returns all entries as EmbeddingCacheEntry (compatible with Bm25SearchService).
         /// </summary>
         public List<EmbeddingCacheEntry> GetAsBm25Entries()
@@ -151,6 +288,7 @@ namespace ADO_Tools_WinUI.Services
     /// <summary>
     /// Cache entry for query search — same fields as EmbeddingCacheEntry
     /// but without the embedding vectors, keeping the file small and fast.
+    /// Also stores all Fields and Attachments for full WorkItemDto reconstruction.
     /// </summary>
     public class QueryCacheEntry
     {
@@ -164,5 +302,14 @@ namespace ADO_Tools_WinUI.Services
         public string HtmlUrl { get; set; } = "";
         public string ChangedDate { get; set; } = "";
         public string? SearchableText { get; set; }
+        public Dictionary<string, string> Fields { get; set; } = new();
+        public List<CachedAttachment> Attachments { get; set; } = [];
+    }
+
+    public class CachedAttachment
+    {
+        public string Url { get; set; } = "";
+        public string FileName { get; set; } = "";
+        public long Length { get; set; }
     }
 }

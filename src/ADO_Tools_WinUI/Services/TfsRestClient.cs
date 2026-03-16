@@ -83,6 +83,33 @@ namespace ADO_Tools.Services
             return result;
         }
 
+        /// <summary>
+        /// Executes a saved query and returns only the matching work item IDs and column definitions.
+        /// Does NOT fetch full work item data — use this for incremental cache scenarios.
+        /// </summary>
+        public async Task<QueryExecutionResult> ExecuteQueryAsync(string savedQueryUrl)
+        {
+            var result = new QueryExecutionResult();
+            if (string.IsNullOrWhiteSpace(savedQueryUrl)) return result;
+
+            var resp = await _http.GetAsync($"{savedQueryUrl}?api-version=7.1");
+            resp.EnsureSuccessStatusCode();
+            var json = JObject.Parse(await resp.Content.ReadAsStringAsync());
+
+            result.Columns = json["columns"]?
+                .Select(c => c["referenceName"]?.ToString() ?? "")
+                .Where(c => !string.IsNullOrEmpty(c))
+                .ToList() ?? [];
+
+            result.WorkItemIds = json["workItems"]?
+                .Select(x => (int?)x["id"])
+                .Where(i => i.HasValue)
+                .Select(i => i!.Value)
+                .ToList() ?? [];
+
+            return result;
+        }
+
         public async Task<QueryExecutionResult> QueryWorkItemsAsync(string savedQueryUrl)
         {
             var result = new QueryExecutionResult();
@@ -129,7 +156,36 @@ namespace ADO_Tools.Services
             return await FetchWorkItemsByIdsAsync(ids, progressCallback);
         }
 
-        private async Task<List<WorkItemDto>> FetchWorkItemsByIdsAsync(List<int> ids, Action<int, int>? progressCallback = null)
+        /// <summary>
+        /// Lightweight batch fetch that returns only (Id, ChangedDate) for each work item.
+        /// Uses $select to avoid downloading all fields/relations/comments.
+        /// </summary>
+        public async Task<Dictionary<int, string>> FetchWorkItemChangedDatesAsync(List<int> ids)
+        {
+            var result = new Dictionary<int, string>();
+            var chunkSize = 200; // larger chunks are fine for lightweight calls
+
+            for (int i = 0; i < ids.Count; i += chunkSize)
+            {
+                var chunk = ids.Skip(i).Take(chunkSize).ToList();
+                string idsCsv = string.Join(",", chunk);
+                string url = $"{baseUrl}/wit/workitems?ids={idsCsv}&fields=System.Id,System.ChangedDate&api-version=7.1";
+                var resp = await _http.GetAsync(url);
+                resp.EnsureSuccessStatusCode();
+                var json = JObject.Parse(await resp.Content.ReadAsStringAsync());
+
+                foreach (var wi in json["value"] ?? Enumerable.Empty<JToken>())
+                {
+                    int id = wi["id"]?.Value<int>() ?? 0;
+                    string changed = wi["fields"]?["System.ChangedDate"]?.ToString() ?? "";
+                    if (id > 0)
+                        result[id] = changed;
+                }
+            }
+            return result;
+        }
+
+        public async Task<List<WorkItemDto>> FetchWorkItemsByIdsAsync(List<int> ids, Action<int, int>? progressCallback = null)
         {
             var list = new List<WorkItemDto>();
             var chunkSize = 100;
