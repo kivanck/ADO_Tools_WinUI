@@ -7,6 +7,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using Newtonsoft.Json.Linq;
 using System.IO.Compression;
+using System.Threading;
 
 namespace ADO_Tools.Services
 {
@@ -90,7 +91,8 @@ namespace ADO_Tools.Services
             string downloadFolder,
             string extractFolder,
             string personalAccessToken,
-            InstallFunctions installFunctions)
+            InstallFunctions installFunctions,
+            CancellationToken cancellationToken = default)
         {
             // Get artifact metadata
             string baseUrl = $"https://dev.azure.com/{organization}/{project}/_apis";
@@ -114,6 +116,8 @@ namespace ADO_Tools.Services
 
                 foreach (var artifact in artifactsJson["value"])
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
+
                     string name = artifact["name"].ToString();
                     if (name != "InstallerExternalPayloads" && name != "product") continue;
 
@@ -184,7 +188,7 @@ namespace ADO_Tools.Services
                     if (shouldDownload)
                     {
                         // Download the artifact in chunks with progress reporting and retry logic
-                        await DownloadZipFileInChunks(downloadUrl, zipPath, personalAccessToken, remoteSize);
+                        await DownloadZipFileInChunks(downloadUrl, zipPath, personalAccessToken, remoteSize, cancellationToken);
                     }
                     //Kivanc
                     installFunctions.ExtractZipToDirectory(zipPath, extractFolder);
@@ -192,7 +196,7 @@ namespace ADO_Tools.Services
             }
         }
 
-        public async Task DownloadZipFileInChunks(string downloadUrl, string outputPath, string personalAccessToken, long? remoteSize = null)
+        public async Task DownloadZipFileInChunks(string downloadUrl, string outputPath, string personalAccessToken, long? remoteSize = null, CancellationToken cancellationToken = default)
         {
             int chunkSize = 1024 * 1024;
             int maxRetries = 5;
@@ -229,9 +233,9 @@ namespace ADO_Tools.Services
                         {
                             byte[] buffer = new byte[chunkSize];
                             int bytesRead;
-                            while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                            while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, cancellationToken)) > 0)
                             {
-                                await fs.WriteAsync(buffer, 0, bytesRead);
+                                await fs.WriteAsync(buffer, 0, bytesRead, cancellationToken);
                                 downloadedBytes += bytesRead;
 
                                 //if (remoteSize.HasValue && remoteSize.Value > 0)
@@ -269,6 +273,16 @@ namespace ADO_Tools.Services
                         }
                         success = true;
                     }
+                }
+                catch (OperationCanceledException)
+                {
+                    UpdateStatus("Download cancelled by user.");
+                    // Clean up partial file
+                    if (File.Exists(outputPath))
+                    {
+                        try { File.Delete(outputPath); } catch { /* best effort */ }
+                    }
+                    throw; // Re-throw so the caller knows it was cancelled
                 }
                 catch (Exception ex)
                 {

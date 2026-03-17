@@ -38,7 +38,8 @@ namespace ADO_Tools_WinUI.Pages
 
         public static bool IsProgressMessage(string message)
             => message.StartsWith("Downloaded:", System.StringComparison.OrdinalIgnoreCase)
-            || message.StartsWith("Windows Installer is running", System.StringComparison.OrdinalIgnoreCase);
+            || message.StartsWith("Windows Installer is running", System.StringComparison.OrdinalIgnoreCase)
+            || message.StartsWith("Windows Unistaller is running", System.StringComparison.OrdinalIgnoreCase);
 
         public static (string glyph, SolidColorBrush brush) ClassifyMessage(string message)
         {

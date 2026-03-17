@@ -16,112 +16,63 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!--  ROW 0 — Connection & Folder  -->
+        <!--  ROW 0 — Connection  -->
         <Border
             Grid.Row="0"
-            Padding="20"
+            Padding="20,16"
             Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
             BorderThickness="1"
             CornerRadius="8">
-            <Grid ColumnSpacing="24">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-
-                <!--  Connection  -->
-                <StackPanel Grid.Column="0" Spacing="14">
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                        <Border
-                            Width="28"
-                            Height="28"
-                            Background="{ThemeResource SystemAccentColorDark1}"
-                            CornerRadius="6">
-                            <FontIcon
-                                HorizontalAlignment="Center"
-                                VerticalAlignment="Center"
-                                FontSize="14"
-                                Foreground="White"
-                                Glyph="&#xE774;" />
-                        </Border>
-                        <TextBlock
+            <StackPanel Spacing="12">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Border
+                        Width="28"
+                        Height="28"
+                        Background="{ThemeResource SystemAccentColorDark1}"
+                        CornerRadius="6">
+                        <FontIcon
+                            HorizontalAlignment="Center"
                             VerticalAlignment="Center"
-                            Style="{StaticResource BodyStrongTextBlockStyle}"
-                            Text="Connection" />
-                    </StackPanel>
-                    <Grid ColumnSpacing="10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock
-                            Grid.Column="0"
-                            VerticalAlignment="Center"
-                            Style="{StaticResource CaptionTextBlockStyle}"
-                            Text="Project" />
-                        <TextBox
-                            x:Name="txtProjectName"
-                            Grid.Column="1"
-                            Width="160"
-                            PlaceholderText="e.g. Civil" />
-                        <Button
-                            x:Name="btnConnect"
-                            Grid.Column="2"
-                            Height="32"
-                            VerticalAlignment="Bottom"
-                            Click="BtnConnect_Click"
-                            Style="{StaticResource AccentButtonStyle}">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <FontIcon FontSize="14" Glyph="&#xE774;" />
-                                <TextBlock Text="Connect" />
-                            </StackPanel>
-                        </Button>
-                    </Grid>
+                            FontSize="14"
+                            Foreground="White"
+                            Glyph="&#xE774;" />
+                    </Border>
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        Style="{StaticResource BodyStrongTextBlockStyle}"
+                        Text="Connection" />
                 </StackPanel>
-
-                <!--  Download Folder  -->
-                <StackPanel Grid.Column="1" Spacing="14">
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                        <Border
-                            Width="28"
-                            Height="28"
-                            Background="#107C10"
-                            CornerRadius="6">
-                            <FontIcon
-                                HorizontalAlignment="Center"
-                                VerticalAlignment="Center"
-                                FontSize="14"
-                                Foreground="White"
-                                Glyph="&#xED25;" />
-                        </Border>
-                        <TextBlock
-                            VerticalAlignment="Center"
-                            Style="{StaticResource BodyStrongTextBlockStyle}"
-                            Text="Download Folder" />
-                    </StackPanel>
-                    <Grid ColumnSpacing="8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBox
-                            x:Name="txtRootFolder"
-                            Grid.Column="0"
-                            PlaceholderText="e.g. D:\ADO_Items" />
-                        <Button
-                            x:Name="btnBrowseFolder"
-                            Grid.Column="1"
-                            Height="32"
-                            VerticalAlignment="Bottom"
-                            Click="BtnBrowseFolder_Click"
-                            ToolTipService.ToolTip="Browse for folder">
-                            <FontIcon FontSize="14" Glyph="&#xED25;" />
-                        </Button>
-                    </Grid>
-                </StackPanel>
-            </Grid>
+                <Grid ColumnSpacing="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        Grid.Column="0"
+                        VerticalAlignment="Center"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="Project" />
+                    <TextBox
+                        x:Name="txtProjectName"
+                        Grid.Column="1"
+                        Width="160"
+                        PlaceholderText="e.g. Civil" />
+                    <Button
+                        x:Name="btnConnect"
+                        Grid.Column="2"
+                        Height="32"
+                        VerticalAlignment="Bottom"
+                        Click="BtnConnect_Click"
+                        Style="{StaticResource AccentButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon FontSize="14" Glyph="&#xE774;" />
+                            <TextBlock Text="Connect" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
+            </StackPanel>
         </Border>
 
         <!--  ROW 1 — Pivot: Query / Search tabs  -->

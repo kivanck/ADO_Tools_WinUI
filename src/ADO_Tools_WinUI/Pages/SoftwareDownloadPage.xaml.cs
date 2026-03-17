@@ -1,5 +1,4 @@
 ﻿using System;
-using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -9,7 +8,7 @@ using ADO_Tools.Services;
 using ADO_Tools_WinUI.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Windows.Storage.Pickers;
+using System.Threading;
 
 namespace ADO_Tools_WinUI.Pages
 {
@@ -29,7 +28,9 @@ namespace ADO_Tools_WinUI.Pages
         // Observable log entries displayed in the log ListView at the bottom of the page
         private readonly ObservableCollection<LogEntryViewModel> _logEntries = new();
 
-       
+        // Cancellation token source for stopping in-progress downloads
+        private CancellationTokenSource? _downloadCts;
+
 
         /// <summary>Initializes the page, binds the log list, and subscribes to the Loaded event.</summary>
         public SoftwareDownloadPage()
@@ -47,7 +48,6 @@ namespace ADO_Tools_WinUI.Pages
         {
             var settings = AppSettings.Default;
 
-            txtDownloadFolder.Text = settings.DownloadFolder;
             txtDefinitionId.Text = settings.DefinitionId;
             txtProject.Text = settings.Project;
             numBuildCount.Value = settings.BuildCount;
@@ -122,7 +122,6 @@ namespace ADO_Tools_WinUI.Pages
             s.ProductName = (cmbProductName.SelectedItem as ComboBoxItem)?.Content as string ?? "";
             s.DefinitionId = txtDefinitionId.Text;
             s.Project = txtProject.Text;
-            s.DownloadFolder = txtDownloadFolder.Text;
             s.BuildCount = (int)numBuildCount.Value;
             s.Save();
         }
@@ -478,9 +477,11 @@ namespace ADO_Tools_WinUI.Pages
         /// </summary>
         private async void BtnUpdate_Click(object sender, RoutedEventArgs e)
         {
-            if (lvBuilds.SelectedItem is not BuildInfoViewModel selectedVm || string.IsNullOrWhiteSpace(txtDownloadFolder.Text))
+            var downloadFolder = AppSettings.Default.DownloadFolder;
+
+            if (lvBuilds.SelectedItem is not BuildInfoViewModel selectedVm || string.IsNullOrWhiteSpace(downloadFolder))
             {
-                ShowMessage("Please select a build and download folder.");
+                ShowMessage("Please select a build and set a download folder in Settings.");
                 return;
             }
 
@@ -497,33 +498,54 @@ namespace ADO_Tools_WinUI.Pages
                 return;
             }
 
+            // Create a new CancellationTokenSource for this download session
+            _downloadCts?.Dispose();
+            _downloadCts = new CancellationTokenSource();
+
             btnUpdate.IsEnabled = false;
+            btnStopDownload.Visibility = Visibility.Visible;
+            btnStopDownload.IsEnabled = true;
             progressBar.IsIndeterminate = true;
             progressBar.Visibility = Visibility.Visible;
 
             var installFunctions = CreateInstallFunctionsWithLogging();
             var tfsFunctions = CreateTFSFunctionsWithLogging();
 
-            string downloadFolder = Path.Combine(
-                txtDownloadFolder.Text,
+            string buildDownloadFolder = Path.Combine(
+                downloadFolder,
                 selectedBuildInfo.ProductName,
                 selectedBuildInfo.DisplayVersion);
-            string extractFolder = Path.Combine(downloadFolder, "Extracted");
+            string extractFolder = Path.Combine(buildDownloadFolder, "Extracted");
             Directory.CreateDirectory(extractFolder);
 
             string project = txtProject.Text.Trim();
             var settings = AppSettings.Default;
 
-            // Download and extract the build artifacts
-            await tfsFunctions.DownloadLatestBuildArtifacts(
-                settings.Organization, project, selectedBuildInfo.BuildId,
-                downloadFolder, extractFolder,
-                settings.PersonalAccessToken, installFunctions);
+            try
+            {
+                // Download and extract the build artifacts
+                await tfsFunctions.DownloadLatestBuildArtifacts(
+                    settings.Organization, project, selectedBuildInfo.BuildId,
+                    buildDownloadFolder, extractFolder,
+                    settings.PersonalAccessToken, installFunctions,
+                    _downloadCts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                AppendLog("Download was cancelled.");
+                HideDownloadStatus();
+                btnUpdate.IsEnabled = true;
+                btnStopDownload.Visibility = Visibility.Collapsed;
+                progressBar.IsIndeterminate = false;
+                progressBar.Visibility = Visibility.Collapsed;
+                return;
+            }
 
             if (toggleDownloadOnly.IsOn)
             {
                 AppendLog("Download complete (download-only mode).");
                 btnUpdate.IsEnabled = true;
+                btnStopDownload.Visibility = Visibility.Collapsed;
                 progressBar.IsIndeterminate = false;
                 progressBar.Visibility = Visibility.Collapsed;
                 PersistCurrentSettings();
@@ -541,6 +563,7 @@ namespace ADO_Tools_WinUI.Pages
             {
                 ShowMessage("Setup file not found. Update process aborted!");
                 btnUpdate.IsEnabled = true;
+                btnStopDownload.Visibility = Visibility.Collapsed;
                 progressBar.IsIndeterminate = false;
                 progressBar.Visibility = Visibility.Collapsed;
                 return;
@@ -557,6 +580,7 @@ namespace ADO_Tools_WinUI.Pages
                 installed.MajorVersion == selectedBuildInfo.MajorVersion &&
                 installed.MajorVersionSequence == selectedBuildInfo.MajorVersionSequence);
 
+            //Uninstall exisitng version
             if (matchingInstalled != null)
             {
                 installFunctions.UpdateStatus($"Installed version found {matchingInstalled.DisplayVersion}");
@@ -566,6 +590,7 @@ namespace ADO_Tools_WinUI.Pages
                 {
                     ShowMessage("Uninstallation failed. Update process aborted!");
                     btnUpdate.IsEnabled = true;
+                    btnStopDownload.Visibility = Visibility.Collapsed;
                     progressBar.IsIndeterminate = false;
                     progressBar.Visibility = Visibility.Collapsed;
                     return;
@@ -586,31 +611,18 @@ namespace ADO_Tools_WinUI.Pages
             }
 
             btnUpdate.IsEnabled = true;
+            btnStopDownload.Visibility = Visibility.Collapsed;
             progressBar.IsIndeterminate = false;
             progressBar.Visibility = Visibility.Collapsed;
             PersistCurrentSettings();
         }
 
-        /// <summary>
-        /// Opens a folder picker so the user can choose where build artifacts are downloaded.
-        /// Persists the selected path to settings.
-        /// </summary>
-        private async void BtnBrowseDownloadFolder_Click(object sender, RoutedEventArgs e)
+        /// <summary>Cancels the current download operation.</summary>
+        private void BtnStopDownload_Click(object sender, RoutedEventArgs e)
         {
-            var picker = new FolderPicker();
-            picker.SuggestedStartLocation = PickerLocationId.Downloads;
-            picker.FileTypeFilter.Add("*");
-
-            // WinUI 3 requires initializing the picker with the window handle
-            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindow);
-            WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
-
-            var folder = await picker.PickSingleFolderAsync();
-            if (folder != null)
-            {
-                txtDownloadFolder.Text = folder.Path;
-                PersistCurrentSettings();
-            }
+            _downloadCts?.Cancel();
+            btnStopDownload.IsEnabled = false;
+            AppendLog("Cancellation requested — waiting for download to stop…");
         }
 
         /// <summary>

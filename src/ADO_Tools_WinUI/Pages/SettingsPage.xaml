@@ -61,7 +61,7 @@
                        Margin="0,0,0,4" />
 
             <TextBox x:Name="txtRootFolder"
-                     Header="Work Items Root Folder"
+                     Header="Work Items Download Folder"
                      PlaceholderText="e.g. D:\ADO_Items" />
 
             <TextBox x:Name="txtDownloadFolder"
@@ -74,7 +74,7 @@
             <TextBlock Text="About"
                        Style="{StaticResource SubtitleTextBlockStyle}"
                        Margin="0,0,0,4" />
-            <TextBlock Text="ADO Tools for Azure DevOps"
+            <TextBlock Text="Tools for Azure DevOps"
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
             <TextBlock Text="kivanc.karakas@bentley.com"
                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"

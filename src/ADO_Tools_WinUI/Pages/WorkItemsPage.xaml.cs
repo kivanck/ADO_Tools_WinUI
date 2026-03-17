@@ -15,7 +15,6 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Media;
-using Windows.Storage.Pickers;
 
 namespace ADO_Tools_WinUI.Pages
 {
@@ -77,7 +76,6 @@ namespace ADO_Tools_WinUI.Pages
         {
             var s = AppSettings.Default;
             txtProjectName.Text = s.Project;
-            txtRootFolder.Text = s.RootFolder;
             txtAreaPath.Text = s.SearchAreaPath;
             dataGridWorkItems.ItemsSource = _rows;
         }
@@ -146,7 +144,6 @@ namespace ADO_Tools_WinUI.Pages
         {
             var s = AppSettings.Default;
             s.Project = txtProjectName.Text.Trim();
-            s.RootFolder = txtRootFolder.Text.Trim();
             s.Save();
         }
 
@@ -163,7 +160,7 @@ namespace ADO_Tools_WinUI.Pages
 
         private string ReadTopFolder()
         {
-            string folder = txtRootFolder.Text.Trim();
+            string folder = AppSettings.Default.RootFolder.Trim();
             if (!Directory.Exists(folder))
                 folder = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
             if (!folder.EndsWith(Path.DirectorySeparatorChar))
@@ -821,22 +818,6 @@ namespace ADO_Tools_WinUI.Pages
             });
         }
 
-        private async void BtnBrowseFolder_Click(object sender, RoutedEventArgs e)
-        {
-            var picker = new FolderPicker();
-            picker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
-            picker.FileTypeFilter.Add("*");
-
-            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindow);
-            WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
-
-            var folder = await picker.PickSingleFolderAsync();
-            if (folder != null)
-            {
-                txtRootFolder.Text = folder.Path;
-                PersistSettings();
-            }
-        }
 
         // ?? Query Search (BM25 within query results) ????????????????????
 

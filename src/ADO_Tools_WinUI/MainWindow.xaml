@@ -23,18 +23,6 @@
         <!-- Full-width drag region covering the entire title bar row -->
         <Grid x:Name="AppTitleBar" Grid.Row="0" Background="Transparent" />
 
-        <!-- Centered app title in the title bar -->
-        <TextBlock Text="ADO Tools"
-                   Grid.Row="0"
-                   FontSize="16"
-                   FontWeight="SemiBold"
-                   Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
-                   HorizontalAlignment="Center"
-                   VerticalAlignment="Center"
-                   IsHitTestVisible="False"
-                   Opacity="0.9"
-                   Padding="0,0,0,10"/>
-
         <!-- TabView overlays the same row; tab strip sits in the title bar -->
         <TabView x:Name="MainTabView"
                  Grid.Row="0" Grid.RowSpan="2"
