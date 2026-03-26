@@ -457,6 +457,17 @@ namespace ADO_Tools_WinUI.Services
             return _cache?.GetEntries(excludeDone) ?? new List<EmbeddingCacheEntry>();
         }
 
+        /// <summary>
+        /// Attempts to load an existing embedding cache from disk without connecting to Azure DevOps.
+        /// Returns true if a cache was found and loaded.
+        /// </summary>
+        public bool TryLoadCache(string organization, string project, string areaPath = "")
+        {
+            string cacheKey = string.IsNullOrWhiteSpace(areaPath) ? project : $"{project}_{areaPath}";
+            _cache = new EmbeddingCache(organization, cacheKey, _cacheDir);
+            return _cache.TryLoad();
+        }
+
         public void Dispose() => _embedder?.Dispose();
     }
 

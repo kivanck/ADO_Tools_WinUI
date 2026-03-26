@@ -78,6 +78,52 @@ namespace ADO_Tools_WinUI.Pages
             txtProjectName.Text = s.Project;
             txtAreaPath.Text = s.SearchAreaPath;
             dataGridWorkItems.ItemsSource = _rows;
+
+            // Try to load existing embedding cache from disk so search works immediately
+            TryLoadExistingCache();
+        }
+
+        /// <summary>
+        /// Attempts to load an existing embedding cache from disk without requiring
+        /// a connection or Build Index. Enables search if a cache is found.
+        /// </summary>
+        private void TryLoadExistingCache()
+        {
+            var settings = AppSettings.Default;
+            if (string.IsNullOrWhiteSpace(settings.Organization) || string.IsNullOrWhiteSpace(settings.Project))
+                return;
+
+            string modelDir = Path.Combine(AppContext.BaseDirectory, "Assets", "Models");
+            if (!File.Exists(Path.Combine(modelDir, "model.onnx")))
+                return;
+
+            try
+            {
+                string cacheDir = Path.Combine(AppContext.BaseDirectory, "EmbeddingCache");
+                var search = new SemanticSearchService(modelDir, cacheDir);
+                string areaPath = settings.SearchAreaPath?.Trim() ?? "";
+
+                if (search.TryLoadCache(settings.Organization, settings.Project, areaPath))
+                {
+                    _semanticSearch?.Dispose();
+                    _semanticSearch = search;
+
+                    _bm25BacklogSearch = new Bm25SearchService();
+                    _bm25BacklogSearch.BuildIndex(_semanticSearch.GetCacheEntries(false));
+
+                    txtSemanticSearch.IsEnabled = true;
+                    lblCacheStatus.Text = $"Loaded {_semanticSearch.CachedItemCount} items from cache (use Build Index to update)";
+                    UpdateCacheCountLabel();
+                }
+                else
+                {
+                    search.Dispose();
+                }
+            }
+            catch
+            {
+                // Silently fail — user can still build index manually
+            }
         }
 
         // ?? View Model Row ??????????????????????????????????????????????
@@ -919,7 +965,6 @@ namespace ADO_Tools_WinUI.Pages
                     settings.Organization,
                     settings.Project,
                     areaPath,
-                    forceRebuild: true,
                     progressCallback: (current, count) =>
                     {
                         DispatcherQueue.TryEnqueue(() =>
@@ -930,7 +975,9 @@ namespace ADO_Tools_WinUI.Pages
                 _bm25BacklogSearch.BuildIndex(_semanticSearch.GetCacheEntries(false));
 
                 txtSemanticSearch.IsEnabled = true;
-                lblCacheStatus.Text = $"Ready — added {added} new items, {total} total indexed (rebuilt, Semantic + BM25)";
+                lblCacheStatus.Text = added > 0
+                    ? $"Ready — added {added} new items, {total} total indexed (Semantic + BM25)"
+                    : $"Ready — {total} items indexed, cache up to date (Semantic + BM25)";
                 UpdateCacheCountLabel();
             }
             catch (Exception ex)
