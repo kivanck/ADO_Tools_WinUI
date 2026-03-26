@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -76,17 +76,11 @@ namespace ADO_Tools_WinUI.Pages
         {
             var s = AppSettings.Default;
             txtProjectName.Text = s.Project;
-            txtAreaPath.Text = s.SearchAreaPath;
             dataGridWorkItems.ItemsSource = _rows;
 
-            // Try to load existing embedding cache from disk so search works immediately
             TryLoadExistingCache();
         }
 
-        /// <summary>
-        /// Attempts to load an existing embedding cache from disk without requiring
-        /// a connection or Build Index. Enables search if a cache is found.
-        /// </summary>
         private void TryLoadExistingCache()
         {
             var settings = AppSettings.Default;
@@ -112,17 +106,18 @@ namespace ADO_Tools_WinUI.Pages
                     _bm25BacklogSearch.BuildIndex(_semanticSearch.GetCacheEntries(false));
 
                     txtSemanticSearch.IsEnabled = true;
-                    lblCacheStatus.Text = $"Loaded {_semanticSearch.CachedItemCount} items from cache (use Build Index to update)";
+                    lblCacheStatus.Text = $"Loaded {_semanticSearch.CachedItemCount} items from cache (use Update to fetch new items)";
                     UpdateCacheCountLabel();
                 }
                 else
                 {
                     search.Dispose();
+                    lblCacheStatus.Text = "No cache found. Go to Settings to build the search index.";
                 }
             }
             catch
             {
-                // Silently fail � user can still build index manually
+                // Silently fail — user can still build index in Settings
             }
         }
 
@@ -436,8 +431,7 @@ namespace ADO_Tools_WinUI.Pages
                 btnDownloadSelected.IsEnabled = true;
                 btnDownloadSingle.IsEnabled = true;
                 btnCompare.IsEnabled = true;
-                btnBuildIndex.IsEnabled = true;
-                btnForceRebuild.IsEnabled = true;
+                btnUpdateIndex.IsEnabled = true;
             }
             catch (Exception ex)
             {
@@ -446,8 +440,7 @@ namespace ADO_Tools_WinUI.Pages
                 btnDownloadSelected.IsEnabled = false;
                 btnDownloadSingle.IsEnabled = false;
                 btnCompare.IsEnabled = false;
-                btnBuildIndex.IsEnabled = false;
-                btnForceRebuild.IsEnabled = false;
+                btnUpdateIndex.IsEnabled = false;
             }
 
             progressBar.IsIndeterminate = false;
@@ -469,7 +462,7 @@ namespace ADO_Tools_WinUI.Pages
 
             string wiql = q.Wiql ?? "";
 
-            lblItemCount.Text = "Reading�";
+            lblItemCount.Text = "Reading…";
             btnReadItems.IsEnabled = false;
             progressBar.IsIndeterminate = true;
             progressBar.Visibility = Visibility.Visible;
@@ -494,7 +487,7 @@ namespace ADO_Tools_WinUI.Pages
                     _querySearchCache = new QuerySearchCache(q.Id, cacheDir);
                     _querySearchCache.TryLoad();
 
-                    lblItemCount.Text = $"Checking {allIds.Count} items�";
+                    lblItemCount.Text = $"Checking {allIds.Count} items…";
                     var freshChangedDates = await _tfsRest.FetchWorkItemChangedDatesAsync(allIds);
 
                     // Step 3: Determine which items need a full re-fetch
@@ -503,7 +496,7 @@ namespace ADO_Tools_WinUI.Pages
                     // Step 4: Fetch only new/changed items
                     if (idsToFetch.Count > 0)
                     {
-                        lblItemCount.Text = $"Fetching {idsToFetch.Count} of {allIds.Count} items�";
+                        lblItemCount.Text = $"Fetching {idsToFetch.Count} of {allIds.Count} items…";
                         var freshItems = await _tfsRest.FetchWorkItemsByIdsAsync(idsToFetch);
                         _querySearchCache.MergeFullItems(freshItems);
                         await _querySearchCache.SaveAsync();
@@ -514,7 +507,7 @@ namespace ADO_Tools_WinUI.Pages
                 }
                 else
                 {
-                    // No query ID � fall back to full fetch (no caching possible)
+                    // No query ID — fall back to full fetch (no caching possible)
                     var fullResult = await _tfsRest.QueryWorkItemsAsync(wiql);
                     _workItemList = fullResult.WorkItems;
                 }
@@ -864,65 +857,23 @@ namespace ADO_Tools_WinUI.Pages
             });
         }
 
-
-        // ?? Query Search (BM25 within query results) ????????????????????
-
-        private async void TxtQuerySearch_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
+        /// <summary>
+        /// Reloads the search cache from disk. Called after Settings page rebuilds the index.
+        /// </summary>
+        public void ReloadSearchCache()
         {
-            if (_bm25QuerySearch == null || _bm25QuerySearch.DocumentCount == 0)
-            {
-                ShowMessage("Run a query first to enable search within results.", "No Query Loaded");
-                return;
-            }
-
-            string query = txtQuerySearch.Text?.Trim() ?? "";
-            if (string.IsNullOrEmpty(query))
-            {
-                BtnClearQuerySearch_Click(null!, null!);
-                return;
-            }
-
-            progressBar.IsIndeterminate = true;
-            progressBar.Visibility = Visibility.Visible;
-
-            var results = await Task.Run(() =>
-                _bm25QuerySearch.Search(query, _bm25QuerySearch.DocumentCount));
-
-            // Keep query columns for search-within-query results
-            ApplyDynamicColumns(_queryColumns);
-
-            _rows.Clear();
-            foreach (var r in results)
-                _rows.Add(BuildRowFromCacheEntry(r.CacheEntry, $"[{r.Score:F1}]"));
-
-            _listMode = ListMode.SearchQuery;
-            _lastSearchQuery = query;
-            lblItemCount.Text = $"{results.Count}/{_bm25QuerySearch.DocumentCount} matches in query";
-            UpdateContextBadge();
-            HighlightRows();
-            progressBar.IsIndeterminate = false;
-            progressBar.Visibility = Visibility.Collapsed;
+            TryLoadExistingCache();
         }
 
-        private void BtnClearQuerySearch_Click(object sender, RoutedEventArgs e)
+        private void UpdateCacheCountLabel()
         {
-            txtQuerySearch.Text = "";
-
-            ApplyDynamicColumns(_queryColumns);
-
-            _rows.Clear();
-            foreach (var row in BuildRows(_workItemList))
-                _rows.Add(row);
-
-            _listMode = ListMode.Query;
-            lblItemCount.Text = $"{_workItemList.Count} items";
-            UpdateContextBadge();
-            HighlightRows();
+            int count = _semanticSearch?.CachedItemCount ?? 0;
+            lblCacheCount.Text = count > 0 ? $"[{count} in cache]" : "";
         }
 
-        // ?? Backlog Search (Semantic + BM25) ????????????????????????????
+        // ── Backlog Search (Semantic + BM25) ────────────────────────────
 
-        private async void BtnBuildIndex_Click(object sender, RoutedEventArgs e)
+        private async void BtnUpdateIndex_Click(object sender, RoutedEventArgs e)
         {
             if (_tfsRest == null)
             {
@@ -943,7 +894,7 @@ namespace ADO_Tools_WinUI.Pages
                 return;
             }
 
-            btnBuildIndex.IsEnabled = false;
+            btnUpdateIndex.IsEnabled = false;
             txtSemanticSearch.IsEnabled = false;
             progressBar.IsIndeterminate = true;
             progressBar.Visibility = Visibility.Visible;
@@ -956,9 +907,7 @@ namespace ADO_Tools_WinUI.Pages
                 _semanticSearch.StatusUpdated += msg =>
                     DispatcherQueue.TryEnqueue(() => lblCacheStatus.Text = msg);
 
-                string areaPath = txtAreaPath.Text.Trim();
-                settings.SearchAreaPath = areaPath;
-                settings.Save();
+                string areaPath = settings.SearchAreaPath?.Trim() ?? "";
 
                 var (added, total) = await _semanticSearch.BuildOrUpdateCacheAsync(
                     _tfsRest,
@@ -968,7 +917,7 @@ namespace ADO_Tools_WinUI.Pages
                     progressCallback: (current, count) =>
                     {
                         DispatcherQueue.TryEnqueue(() =>
-                            lblCacheStatus.Text = $"Embedding {current}/{count}�");
+                            lblCacheStatus.Text = $"Embedding {current}/{count}…");
                     });
 
                 _bm25BacklogSearch = new Bm25SearchService();
@@ -976,32 +925,18 @@ namespace ADO_Tools_WinUI.Pages
 
                 txtSemanticSearch.IsEnabled = true;
                 lblCacheStatus.Text = added > 0
-                    ? $"Ready � added {added} new items, {total} total indexed (Semantic + BM25)"
-                    : $"Ready � {total} items indexed, cache up to date (Semantic + BM25)";
+                    ? $"Ready — added {added} new items, {total} total indexed (Semantic + BM25)"
+                    : $"Ready — {total} items indexed, cache up to date (Semantic + BM25)";
                 UpdateCacheCountLabel();
             }
             catch (Exception ex)
             {
-                var errorBox = new TextBox
-                {
-                    Text = ex.Message,
-                    TextWrapping = TextWrapping.Wrap,
-                    IsReadOnly = true,
-                    BorderThickness = new Thickness(0)
-                };
-                await new ContentDialog
-                {
-                    Title = "Error",
-                    Content = errorBox,
-                    CloseButtonText = "OK",
-                    XamlRoot = this.XamlRoot
-                }.ShowAsync();
-                lblCacheStatus.Text = "Index rebuild failed";
+                lblCacheStatus.Text = $"Update failed: {ex.Message}";
             }
 
             progressBar.IsIndeterminate = false;
             progressBar.Visibility = Visibility.Collapsed;
-            btnBuildIndex.IsEnabled = true;
+            btnUpdateIndex.IsEnabled = true;
         }
 
         private void CmbSearchMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -1109,105 +1044,59 @@ namespace ADO_Tools_WinUI.Pages
             UpdateContextBadge();
         }
 
-        private async void BtnForceRebuild_Click(object sender, RoutedEventArgs e)
+        // ── Query Search (BM25 within query results) ────────────────────
+
+        private async void TxtQuerySearch_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
         {
-            if (_tfsRest == null)
+            if (_bm25QuerySearch == null || _bm25QuerySearch.DocumentCount == 0)
             {
-                ShowMessage("Connect to a project first.", "Not Connected");
+                ShowMessage("Run a query first to enable search within results.", "No Query Loaded");
                 return;
             }
 
-            var confirm = new ContentDialog
+            string query = txtQuerySearch.Text?.Trim() ?? "";
+            if (string.IsNullOrEmpty(query))
             {
-                Title = "Force Rebuild",
-                Content = "This will delete the existing embedding cache and re-index all work items from scratch. This may take a while.\n\nContinue?",
-                PrimaryButtonText = "Rebuild",
-                CloseButtonText = "Cancel",
-                DefaultButton = ContentDialogButton.Close,
-                XamlRoot = this.XamlRoot
-            };
-
-            if (await confirm.ShowAsync() != ContentDialogResult.Primary) return;
-
-            var settings = AppSettings.Default;
-            string modelDir = Path.Combine(AppContext.BaseDirectory, "Assets", "Models");
-
-            if (!File.Exists(Path.Combine(modelDir, "model.onnx")))
-            {
-                ShowMessage(
-                    "Embedding model not found.\n\n" +
-                    "Place 'model.onnx' and 'vocab.txt' in:\n" +
-                    modelDir,
-                    "Model Missing");
+                BtnClearQuerySearch_Click(null!, null!);
                 return;
             }
 
-            btnBuildIndex.IsEnabled = false;
-            btnForceRebuild.IsEnabled = false;
-            txtSemanticSearch.IsEnabled = false;
             progressBar.IsIndeterminate = true;
             progressBar.Visibility = Visibility.Visible;
 
-            try
-            {
-                _semanticSearch?.Dispose();
-                string cacheDir = Path.Combine(AppContext.BaseDirectory, "EmbeddingCache");
-                _semanticSearch = new SemanticSearchService(modelDir, cacheDir);
-                _semanticSearch.StatusUpdated += msg =>
-                    DispatcherQueue.TryEnqueue(() => lblCacheStatus.Text = msg);
+            var results = await Task.Run(() =>
+                _bm25QuerySearch.Search(query, _bm25QuerySearch.DocumentCount));
 
-                string areaPath = txtAreaPath.Text.Trim();
-                settings.SearchAreaPath = areaPath;
-                settings.Save();
+            // Keep query columns for search-within-query results
+            ApplyDynamicColumns(_queryColumns);
 
-                await _semanticSearch.BuildOrUpdateCacheAsync(
-                    _tfsRest,
-                    settings.Organization,
-                    settings.Project,
-                    areaPath,
-                    forceRebuild: true,
-                    progressCallback: (current, count) =>
-                    {
-                        DispatcherQueue.TryEnqueue(() =>
-                            lblCacheStatus.Text = $"Embedding {current}/{count}�");
-                    });
+            _rows.Clear();
+            foreach (var r in results)
+                _rows.Add(BuildRowFromCacheEntry(r.CacheEntry, $"[{r.Score:F1}]"));
 
-                _bm25BacklogSearch = new Bm25SearchService();
-                _bm25BacklogSearch.BuildIndex(_semanticSearch.GetCacheEntries(false));
-
-                txtSemanticSearch.IsEnabled = true;
-                lblCacheStatus.Text = $"Ready � {_semanticSearch.CachedItemCount} items indexed (rebuilt, Semantic + BM25)";
-                UpdateCacheCountLabel();
-            }
-            catch (Exception ex)
-            {
-                var errorBox = new TextBox
-                {
-                    Text = ex.Message,
-                    TextWrapping = TextWrapping.Wrap,
-                    IsReadOnly = true,
-                    BorderThickness = new Thickness(0)
-                };
-                await new ContentDialog
-                {
-                    Title = "Error",
-                    Content = errorBox,
-                    CloseButtonText = "OK",
-                    XamlRoot = this.XamlRoot
-                }.ShowAsync();
-                lblCacheStatus.Text = "Index rebuild failed";
-            }
-
+            _listMode = ListMode.SearchQuery;
+            _lastSearchQuery = query;
+            lblItemCount.Text = $"{results.Count}/{_bm25QuerySearch.DocumentCount} matches in query";
+            UpdateContextBadge();
+            HighlightRows();
             progressBar.IsIndeterminate = false;
             progressBar.Visibility = Visibility.Collapsed;
-            btnBuildIndex.IsEnabled = true;
-            btnForceRebuild.IsEnabled = true;
         }
 
-        private void UpdateCacheCountLabel()
+        private void BtnClearQuerySearch_Click(object sender, RoutedEventArgs e)
         {
-            int count = _semanticSearch?.CachedItemCount ?? 0;
-            lblCacheCount.Text = count > 0 ? $"[{count} in cache]" : "";
+            txtQuerySearch.Text = "";
+
+            ApplyDynamicColumns(_queryColumns);
+
+            _rows.Clear();
+            foreach (var row in BuildRows(_workItemList))
+                _rows.Add(row);
+
+            _listMode = ListMode.Query;
+            lblItemCount.Text = $"{_workItemList.Count} items";
+            UpdateContextBadge();
+            HighlightRows();
         }
     }
 }

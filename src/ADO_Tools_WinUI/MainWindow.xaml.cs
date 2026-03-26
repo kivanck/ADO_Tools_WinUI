@@ -43,6 +43,15 @@ namespace ADO_Tools_WinUI
             var settingsPage = new SettingsPage();
             settingsPage.LoadSettings();
 
+            settingsPage.IndexRebuilt += () =>
+            {
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    if (FindWorkItemsPage() is WorkItemsPage page)
+                        page.ReloadSearchCache();
+                });
+            };
+
             var dialog = new ContentDialog
             {
                 Title = "Settings",
@@ -54,6 +63,16 @@ namespace ADO_Tools_WinUI
             await dialog.ShowAsync();
 
             settingsPage.SaveSettings();
+        }
+
+        private WorkItemsPage? FindWorkItemsPage()
+        {
+            foreach (var item in MainTabView.TabItems)
+            {
+                if (item is TabViewItem tabItem && tabItem.Content is WorkItemsPage page)
+                    return page;
+            }
+            return null;
         }
 
         private void MainWindow_Closed(object sender, WindowEventArgs args)

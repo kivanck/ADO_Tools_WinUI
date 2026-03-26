@@ -155,61 +155,12 @@
                     </PivotItem.Header>
 
                     <StackPanel Margin="0,10,0,0" Spacing="10">
-                        <!--  Index controls  -->
-                        <Grid ColumnSpacing="10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock
-                                Grid.Column="0"
-                                VerticalAlignment="Center"
-                                Style="{StaticResource CaptionTextBlockStyle}"
-                                Text="Iteration Path" />
-                            <TextBox
-                                x:Name="txtAreaPath"
-                                Grid.Column="1"
-                                PlaceholderText="e.g. Civil\OpenCivil Designer\Backlog" />
-                            <Button
-                                x:Name="btnBuildIndex"
-                                Grid.Column="2"
-                                Height="32"
-                                Click="BtnBuildIndex_Click"
-                                IsEnabled="False"
-                                ToolTipService.ToolTip="Build or update the local embedding cache for the specified area path">
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <FontIcon FontSize="14" Glyph="&#xEBD3;" />
-                                    <TextBlock Text="Build Index" />
-                                </StackPanel>
-                            </Button>
-                            <Button
-                                x:Name="btnForceRebuild"
-                                Grid.Column="3"
-                                Height="32"
-                                Click="BtnForceRebuild_Click"
-                                IsEnabled="False"
-                                ToolTipService.ToolTip="Delete existing cache and re-embed all work items from scratch">
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <FontIcon FontSize="14" Glyph="&#xE72C;" />
-                                    <TextBlock Text="Force Rebuild" />
-                                </StackPanel>
-                            </Button>
-                            <TextBlock
-                                x:Name="lblCacheStatus"
-                                Grid.Column="4"
-                                VerticalAlignment="Center"
-                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                Style="{StaticResource CaptionTextBlockStyle}" />
-                        </Grid>
-
                         <!--  Search box & options  -->
                         <Grid ColumnSpacing="10">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
@@ -264,13 +215,28 @@
                                 ToolTipService.ToolTip="Clear search and show query results">
                                 <FontIcon FontSize="14" Glyph="&#xE894;" />
                             </Button>
+                            <Button
+                                x:Name="btnUpdateIndex"
+                                Grid.Column="5"
+                                Height="32"
+                                Click="BtnUpdateIndex_Click"
+                                ToolTipService.ToolTip="Fetch new/changed items and update the search cache">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon FontSize="14" Glyph="&#xE895;" />
+                                    <TextBlock Text="Update" />
+                                </StackPanel>
+                            </Button>
                             <TextBlock
                                 x:Name="lblCacheCount"
-                                Grid.Column="5"
+                                Grid.Column="6"
                                 VerticalAlignment="Center"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                 Style="{StaticResource CaptionTextBlockStyle}" />
                         </Grid>
+                        <TextBlock
+                            x:Name="lblCacheStatus"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}" />
                     </StackPanel>
                 </PivotItem>
             </Pivot>

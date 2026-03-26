@@ -221,7 +221,10 @@ namespace ADO_Tools_WinUI.Services
                     StatusUpdated?.Invoke($"Loaded {_cache.Count} cached embeddings from disk.");
                 else
                     StatusUpdated?.Invoke("No existing cache found. Building from scratch…");
+                
             }
+            
+            StatusUpdated?.Invoke(_embedder.IsUsingGpu ? "Using GPU (DirectML)" : "Using CPU");
 
             // Discover actual type names in this project and match against our targets
             StatusUpdated?.Invoke("Discovering work item types…");
@@ -246,8 +249,10 @@ namespace ADO_Tools_WinUI.Services
             }
             else
             {
-                dateFilter = " AND [System.CreatedDate] > '2023-01-01T00:00:00.0000000'";
-                StatusUpdated?.Invoke("Fetching backlog items created since 2023-01-01…");
+                string cutoffDate = AppSettings.Default.SearchCutoffDate;
+                if (string.IsNullOrWhiteSpace(cutoffDate)) cutoffDate = "2023-01-01";
+                dateFilter = $" AND [System.CreatedDate] > '{cutoffDate}T00:00:00.0000000'";
+                StatusUpdated?.Invoke($"Fetching backlog items created since {cutoffDate}…");
             }
 
             string typeFilter = $" AND [System.WorkItemType] IN ({string.Join(", ", matchedTypes.Select(t => $"'{t}'"))})";
@@ -263,17 +268,24 @@ namespace ADO_Tools_WinUI.Services
                 wiql = $"SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project{dateFilter}{typeFilter} ORDER BY [System.Id]";
             }
 
-
-            var allItems = await tfsClient.QueryByWiqlAsync(
+            var queryResult = await tfsClient.QueryByWiqlAsync(
                 wiql,
                 progressCallback: (fetched, total) =>
                 {
                     StatusUpdated?.Invoke($"Fetching work items… {fetched}/{total}");
                 });
 
+            var allItems = queryResult.WorkItems;
+
+            if (queryResult.QueryLimitHit)
+            {
+                StatusUpdated?.Invoke($"⚠ Warning: Query returned {queryResult.TotalIdsReturned} items — the Azure DevOps 20,000 item limit was reached. Some items may be missing. Narrow the Iteration Path or move the cutoff date forward in Settings.");
+            }
+
             StatusUpdated?.Invoke($"Fetched {allItems.Count} work items from Azure DevOps.");
 
-            var needsEmbedding = _cache.GetItemsNeedingEmbedding(allItems);
+            bool isIncremental = !forceRebuild && _cache.LastUpdatedUtc > DateTime.MinValue;
+            var needsEmbedding = _cache.GetItemsNeedingEmbedding(allItems, isIncrementalUpdate: isIncremental);
             StatusUpdated?.Invoke(needsEmbedding.Count == 0
                 ? $"Cache is up to date — no new embeddings needed. {_cache.Count} total items indexed."
                 : $"Embedding {needsEmbedding.Count} new/changed items ({_cache.Count} already cached)…");
@@ -469,6 +481,7 @@ namespace ADO_Tools_WinUI.Services
         }
 
         public void Dispose() => _embedder?.Dispose();
+        public bool IsUsingGpu => _embedder.IsUsingGpu;
     }
 
     public class SemanticSearchResult

@@ -15,14 +15,38 @@ namespace ADO_Tools_WinUI.Services
         private const int MaxTokens = 256;
         private const int ChunkOverlapTokens = 32;
 
+        /// <summary>
+        /// True if the ONNX session is running on GPU via DirectML.
+        /// </summary>
+        public bool IsUsingGpu { get; }
+
         public LocalEmbeddingService(string modelDir)
         {
             string modelPath = Path.Combine(modelDir, "model.onnx");
             string vocabPath = Path.Combine(modelDir, "vocab.txt");
 
-            var options = new SessionOptions();
-            options.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL;
-            _session = new InferenceSession(modelPath, options);
+            // Try DirectML (GPU) first, fall back to CPU if unavailable
+            InferenceSession? session = null;
+            bool usingGpu = false;
+
+            try
+            {
+                var gpuOptions = new SessionOptions();
+                gpuOptions.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL;
+                gpuOptions.AppendExecutionProvider_DML(0); // device 0 = default GPU
+                session = new InferenceSession(modelPath, gpuOptions);
+                usingGpu = true;
+            }
+            catch
+            {
+                // DirectML not available — fall back to CPU
+                var cpuOptions = new SessionOptions();
+                cpuOptions.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL;
+                session = new InferenceSession(modelPath, cpuOptions);
+            }
+
+            _session = session;
+            IsUsingGpu = usingGpu;
             _tokenizer = BertTokenizer.Create(vocabPath);
         }
 

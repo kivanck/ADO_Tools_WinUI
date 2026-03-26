@@ -75,14 +75,18 @@ namespace ADO_Tools_WinUI.Services
             return _entries.Values.ToList();
         }
 
-        public List<WorkItemDto> GetItemsNeedingEmbedding(List<WorkItemDto> freshItems)
+        public List<WorkItemDto> GetItemsNeedingEmbedding(List<WorkItemDto> freshItems, bool isIncrementalUpdate = false)
         {
             var freshIds = new HashSet<int>(freshItems.Select(w => w.Id));
 
-            // Remove cached items that no longer exist in the backlog
-            var staleIds = _entries.Keys.Where(id => !freshIds.Contains(id)).ToList();
-            foreach (var id in staleIds)
-                _entries.Remove(id);
+            // Only remove stale entries during a full rebuild — during incremental updates
+            // freshItems only contains changed items, not the entire backlog
+            if (!isIncrementalUpdate)
+            {
+                var staleIds = _entries.Keys.Where(id => !freshIds.Contains(id)).ToList();
+                foreach (var id in staleIds)
+                    _entries.Remove(id);
+            }
 
             var needsEmbedding = new List<WorkItemDto>();
             foreach (var wi in freshItems)

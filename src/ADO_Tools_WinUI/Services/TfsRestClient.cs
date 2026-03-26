@@ -133,10 +133,10 @@ namespace ADO_Tools.Services
             return result;
         }
 
-        public async Task<List<WorkItemDto>> QueryByWiqlAsync(string wiql, int top = 20000, Action<int, int>? progressCallback = null)
+        public async Task<WiqlQueryResult> QueryByWiqlAsync(string wiql, int top = 20000, Action<int, int>? progressCallback = null)
         {
-            var list = new List<WorkItemDto>();
-            if (string.IsNullOrWhiteSpace(wiql)) return list;
+            var result = new WiqlQueryResult();
+            if (string.IsNullOrWhiteSpace(wiql)) return result;
 
             var body = new StringContent(
                 JsonConvert.SerializeObject(new { query = wiql }),
@@ -151,9 +151,12 @@ namespace ADO_Tools.Services
             var json = JObject.Parse(await resp.Content.ReadAsStringAsync());
 
             var ids = json["workItems"]?.Select(x => (int?)x["id"])?.Where(i => i.HasValue)?.Select(i => i!.Value).ToList();
-            if (ids == null || ids.Count == 0) return list;
+            if (ids == null || ids.Count == 0) return result;
 
-            return await FetchWorkItemsByIdsAsync(ids, progressCallback);
+            result.TotalIdsReturned = ids.Count;
+            result.QueryLimitHit = ids.Count >= top;
+            result.WorkItems = await FetchWorkItemsByIdsAsync(ids, progressCallback);
+            return result;
         }
 
         /// <summary>

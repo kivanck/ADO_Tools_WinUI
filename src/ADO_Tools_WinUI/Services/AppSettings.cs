@@ -27,6 +27,7 @@ namespace ADO_Tools_WinUI.Services
         public int BuildCount { get; set; } = 30;
         public string ProductName { get; set; } = "";
         public string SearchAreaPath { get; set; } = "";
+        public string SearchCutoffDate { get; set; } = "2023-01-01";
 
         public void Save()
         {
