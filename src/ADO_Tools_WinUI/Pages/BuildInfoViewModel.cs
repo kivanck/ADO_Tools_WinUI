@@ -6,11 +6,11 @@ namespace ADO_Tools_WinUI.Pages
 {
     public class BuildInfoViewModel
     {
-        public string BuildId { get; set; }
-        public string ProductName { get; set; }
-        public string DisplayVersion { get; set; }
-        public string Result { get; set; }
-        public string FinishTime { get; set; }
+        public string BuildId { get; set; } = "";
+        public string ProductName { get; set; } = "";
+        public string DisplayVersion { get; set; } = "";
+        public string Result { get; set; } = "";
+        public string FinishTime { get; set; } = "";
         public int MajorVersion { get; set; }
         public int MajorVersionSequence { get; set; }
         public int MinorVersion { get; set; }

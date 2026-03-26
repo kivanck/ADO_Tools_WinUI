@@ -213,6 +213,7 @@
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <ComboBox
                                 x:Name="cmbSearchMode"
@@ -263,6 +264,12 @@
                                 ToolTipService.ToolTip="Clear search and show query results">
                                 <FontIcon FontSize="14" Glyph="&#xE894;" />
                             </Button>
+                            <TextBlock
+                                x:Name="lblCacheCount"
+                                Grid.Column="5"
+                                VerticalAlignment="Center"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Style="{StaticResource CaptionTextBlockStyle}" />
                         </Grid>
                     </StackPanel>
                 </PivotItem>

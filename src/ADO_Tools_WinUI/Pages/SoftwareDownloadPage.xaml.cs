@@ -256,12 +256,13 @@ namespace ADO_Tools_WinUI.Pages
         /// <summary>
         /// Parses a download progress message and updates the status panel text blocks.
         /// Expected format: "Downloaded: 45.2 MB / 120.0 MB at 5.3 MB/s"
-        /// Also handles "Windows Installer is running…" messages as a special case.
+        /// Also handles "Windows Installer/Uninstaller is running…" messages as a special case.
         /// </summary>
         private void UpdateDownloadStatus(string message)
         {
-            // Installer progress messages don't follow the "Downloaded:" format
-            if (message.StartsWith("Windows Installer is running", StringComparison.OrdinalIgnoreCase))
+            // Installer/Uninstaller progress messages don't follow the "Downloaded:" format
+            if (message.StartsWith("Windows Installer is running", StringComparison.OrdinalIgnoreCase)
+                || message.StartsWith("Windows Uninstaller is running", StringComparison.OrdinalIgnoreCase))
             {
                 txtDownloadSpeed.Text = "";
                 txtDownloadStatus.Text = message;
@@ -555,7 +556,7 @@ namespace ADO_Tools_WinUI.Pages
             // Locate the setup executable among the extracted files
             // (must contain both "setup" and the product name in its filename)
             string productName = selectedBuildInfo.ProductName;
-            string setupFile = Directory.GetFiles(extractFolder, "*.exe", SearchOption.AllDirectories)
+            string? setupFile = Directory.GetFiles(extractFolder, "*.exe", SearchOption.AllDirectories)
                 .FirstOrDefault(f => Path.GetFileName(f).ToLower().Contains("setup") &&
                                       Path.GetFileName(f).ToLower().Contains(productName.ToLower()));
 

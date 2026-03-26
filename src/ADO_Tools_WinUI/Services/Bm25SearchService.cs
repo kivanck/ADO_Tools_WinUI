@@ -81,13 +81,18 @@ namespace ADO_Tools_WinUI.Services
 
         /// <summary>
         /// Search the index and return scored results.
+        /// Supports quoted phrases — e.g. "open dialog" must appear literally.
         /// </summary>
         public List<Bm25SearchResult> Search(string query, int topN = 20, bool excludeDone = false)
         {
             if (_totalDocs == 0 || string.IsNullOrWhiteSpace(query))
                 return new List<Bm25SearchResult>();
 
-            var queryTerms = Tokenize(query);
+            // Extract quoted phrases for mandatory filtering
+            var requiredPhrases = ExtractQuotedPhrases(query);
+
+            // Tokenize the full query (minus quote characters) so all terms contribute to scoring
+            var queryTerms = Tokenize(query.Replace("\"", ""));
             if (queryTerms.Count == 0)
                 return new List<Bm25SearchResult>();
 
@@ -103,6 +108,10 @@ namespace ADO_Tools_WinUI.Services
                         string.Equals(state, "Removed", StringComparison.OrdinalIgnoreCase))
                         continue;
                 }
+
+                // Skip items that don't contain all quoted phrases
+                if (!MatchesRequiredPhrases(doc.CacheEntry, requiredPhrases))
+                    continue;
 
                 double score = 0;
                 foreach (var term in queryTerms)
@@ -130,6 +139,42 @@ namespace ADO_Tools_WinUI.Services
                 .OrderByDescending(r => r.Score)
                 .Take(topN)
                 .ToList();
+        }
+
+        /// <summary>
+        /// Extracts double-quoted phrases from a query string.
+        /// </summary>
+        private static List<string> ExtractQuotedPhrases(string query)
+        {
+            var phrases = new List<string>();
+            foreach (Match match in Regex.Matches(query, "\"([^\"]+)\""))
+            {
+                string phrase = match.Groups[1].Value.Trim();
+                if (phrase.Length > 0)
+                    phrases.Add(phrase);
+            }
+            return phrases;
+        }
+
+        /// <summary>
+        /// Returns true if the cache entry's searchable text contains ALL required phrases (case-insensitive).
+        /// </summary>
+        private static bool MatchesRequiredPhrases(EmbeddingCacheEntry entry, List<string> requiredPhrases)
+        {
+            if (requiredPhrases.Count == 0)
+                return true;
+
+            string text = !string.IsNullOrWhiteSpace(entry.SearchableText)
+                ? entry.SearchableText
+                : entry.Title;
+
+            foreach (var phrase in requiredPhrases)
+            {
+                if (!text.Contains(phrase, StringComparison.OrdinalIgnoreCase))
+                    return false;
+            }
+
+            return true;
         }
 
         private static List<string> Tokenize(string text)

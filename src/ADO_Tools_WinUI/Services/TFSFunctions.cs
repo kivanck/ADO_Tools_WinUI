@@ -14,8 +14,8 @@ namespace ADO_Tools.Services
     // Lightweight, SDK-free TFSFunctions shim. Use TfsRestClient directly for real REST operations.
     public class TFSFunctions
     {
-        public event Action<string> StatusUpdated;
-        public event Action<double> ProgressUpdated;
+        public event Action<string>? StatusUpdated;
+        public event Action<double>? ProgressUpdated;
 
         public void UpdateStatus(string message)
         {
@@ -34,33 +34,28 @@ namespace ADO_Tools.Services
         /// </summary>
         public Func<string, string, Task>? ShowMessageAsync { get; set; }
 
-        bool IsADOProject;
 
         public TFSFunctions()
         {
         }
 
         // Minimal stub to keep compatibility with existing call sites. Prefer using TfsRestClient directly.
-        public object ConnectTFS(string URIName, string projectName)
+        public object? ConnectTFS(string URIName, string projectName)
         {
-            // This method previously returned a Microsoft.TeamFoundation.Project.
-            // With REST usage, connect logic should be handled by TfsRestClient in the UI code.
             return null;
         }
 
         public List<object> ReadQuarries(object project)
         {
-            // Previously returned List<QueryItem>. Use TfsRestClient.GetQueriesAsync instead.
             return new List<object>();
         }
 
         public List<object> ReadItems(string wiql)
         {
-            // Previously returned List<WorkItem>. Use TfsRestClient.QueryWorkItemsAsync instead.
             return new List<object>();
         }
 
-        public object ReadSingleItem(int workItemID)
+        public object? ReadSingleItem(int workItemID)
         {
             return null;
         }
@@ -114,14 +109,14 @@ namespace ADO_Tools.Services
                     return; // Exit the method early if no artifacts
                 }
 
-                foreach (var artifact in artifactsJson["value"])
-                {
+                foreach (var artifact in artifactsJson["value"]!)
+                {   
                     cancellationToken.ThrowIfCancellationRequested();
 
-                    string name = artifact["name"].ToString();
+                    string name = artifact["name"]?.ToString() ?? "";
                     if (name != "InstallerExternalPayloads" && name != "product") continue;
 
-                    string downloadUrl = artifact["resource"]["downloadUrl"].ToString();
+                    string downloadUrl = artifact["resource"]?["downloadUrl"]?.ToString() ?? "";
                     string zipPath = Path.Combine(downloadFolder, $"{name}.zip");
 
                     bool shouldDownload = true;
@@ -226,7 +221,6 @@ namespace ADO_Tools.Services
                         long nextLogPoint = logThreshold;
 
                         DateTime lastLogTime = DateTime.UtcNow;
-                        double lastReportedPercentage = -1; // Keep track of the last percentage we spammed to the UI
 
                         using (var stream = await response.Content.ReadAsStreamAsync())
                         using (var fs = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None))
@@ -260,7 +254,10 @@ namespace ADO_Tools.Services
                                     double downloadedMB = downloadedBytes / (1024.0 * 1024.0);
                                     double speedMBps = logThreshold / (1024.0 * 1024.0) / elapsedSeconds;
 
-                                    double percentage = ((double)downloadedBytes / remoteSize.Value) * 100;
+                                    double percentage = remoteSize.HasValue && remoteSize.Value > 0
+                                        ? ((double)downloadedBytes / remoteSize.Value) * 100
+                                        : 0;
+
                                     ProgressUpdated?.Invoke(percentage);
 
 
@@ -365,14 +362,14 @@ namespace ADO_Tools.Services
 
                 var json = JObject.Parse(await response.Content.ReadAsStringAsync());
 
-                foreach (var build in json["value"])
+                foreach (var build in json["value"]!)
                 {
-                    string buildId = build["id"]?.ToString();
-                    string productName = build["definition"]?["name"]?.ToString();
-                    string buildNumber = build["buildNumber"]?.ToString();
-                    string result = build["result"]?.ToString();
+                    string? buildId = build["id"]?.ToString();
+                    string? productName = build["definition"]?["name"]?.ToString();
+                    string? buildNumber = build["buildNumber"]?.ToString();
+                    string? result = build["result"]?.ToString();
 
-                    string finishTimeRaw = build["finishTime"]?.ToString();
+                    string? finishTimeRaw = build["finishTime"]?.ToString();
                     string finishTime = "";
                     if (!string.IsNullOrEmpty(finishTimeRaw) && DateTime.TryParse(finishTimeRaw, out var dt))
                     {
@@ -380,11 +377,9 @@ namespace ADO_Tools.Services
                     }
                     else
                     {
-                        finishTime = finishTimeRaw; // fallback to original if parsing fails
+                        finishTime = finishTimeRaw ?? "";
                     }
 
-                    //if (!string.IsNullOrEmpty(buildId) && !string.IsNullOrEmpty(buildNumber) &&
-                    //    !string.IsNullOrEmpty(productName) && result == "succeeded")
                     if (!string.IsNullOrEmpty(buildId) && !string.IsNullOrEmpty(buildNumber))
                     {
                         var versionParts = (buildNumber ?? "0.0.0.0").Split('.');
@@ -396,11 +391,10 @@ namespace ADO_Tools.Services
                         builds.Add(new BuildInfo
                         {
                             BuildId = buildId,
-                            ProductName = productName,
-                            Result = result,
+                            ProductName = productName ?? "",
+                            Result = result ?? "",
                             FinishTime = finishTime,
-
-                            DisplayVersion = buildNumber,
+                            DisplayVersion = buildNumber ?? "",
                             MajorVersion = major,
                             MajorVersionSequence = majorSeq,
                             MinorVersion = minor,
@@ -415,12 +409,12 @@ namespace ADO_Tools.Services
 
         public class BuildInfo
         {
-            public string BuildId { get; set; }
-            public string ProductName { get; set; }
-            public string Result { get; set; }
-            public string FinishTime { get; set; }
+            public string BuildId { get; set; } = "";
+            public string ProductName { get; set; } = "";
+            public string Result { get; set; } = "";
+            public string FinishTime { get; set; } = "";
 
-            public string DisplayVersion { get; set; }
+            public string DisplayVersion { get; set; } = "";
             public int MajorVersion { get; set; }
             public int MajorVersionSequence { get; set; }
             public int MinorVersion { get; set; }

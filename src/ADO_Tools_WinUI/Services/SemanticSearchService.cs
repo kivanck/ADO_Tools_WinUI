@@ -1,4 +1,4 @@
-using System;
+ï»¿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -197,7 +197,7 @@ namespace ADO_Tools_WinUI.Services
             _cacheDir = cacheDir;
         }
 
-        public async Task BuildOrUpdateCacheAsync(
+        public async Task<(int Added, int Total)> BuildOrUpdateCacheAsync(
             TfsRestClient tfsClient,
             string organization,
             string project,
@@ -211,7 +211,7 @@ namespace ADO_Tools_WinUI.Services
             if (forceRebuild)
             {
                 _cache.Clear();
-                StatusUpdated?.Invoke("Force rebuild requested — cache cleared.");
+                StatusUpdated?.Invoke("Force rebuild requested â€” cache cleared.");
             }
             else
             {
@@ -220,11 +220,11 @@ namespace ADO_Tools_WinUI.Services
                 if (cacheLoaded)
                     StatusUpdated?.Invoke($"Loaded {_cache.Count} cached embeddings from disk.");
                 else
-                    StatusUpdated?.Invoke("No existing cache found. Building from scratch…");
+                    StatusUpdated?.Invoke("No existing cache found. Building from scratchâ€¦");
             }
 
             // Discover actual type names in this project and match against our targets
-            StatusUpdated?.Invoke("Discovering work item types…");
+            StatusUpdated?.Invoke("Discovering work item typesâ€¦");
             var allTypeNames = await tfsClient.GetWorkItemTypeNamesAsync();
             var matchedTypes = allTypeNames
                 .Where(t => TargetWorkItemTypes.Contains(t, StringComparer.OrdinalIgnoreCase))
@@ -233,21 +233,21 @@ namespace ADO_Tools_WinUI.Services
             if (matchedTypes.Count == 0)
             {
                 StatusUpdated?.Invoke($"Warning: No matching types found. Available types: {string.Join(", ", allTypeNames)}");
-                return;
+                return (0, _cache.Count);
             }
 
-            // Build WIQL — only fetch items created since cutoff, or changed since last cache update
+            // Build WIQL â€” only fetch items created since cutoff, or changed since last cache update
             string dateFilter;
             if (!forceRebuild && _cache.LastUpdatedUtc > DateTime.MinValue)
             {
                 string sinceDate = _cache.LastUpdatedUtc.ToString("yyyy-MM-dd");
                 dateFilter = $" AND [System.ChangedDate] >= '{sinceDate}'";
-                StatusUpdated?.Invoke($"Incremental update — fetching items changed since {sinceDate}…");
+                StatusUpdated?.Invoke($"Incremental update â€” fetching items changed since {sinceDate}â€¦");
             }
             else
             {
                 dateFilter = " AND [System.CreatedDate] > '2023-01-01T00:00:00.0000000'";
-                StatusUpdated?.Invoke("Fetching backlog items created since 2023-01-01…");
+                StatusUpdated?.Invoke("Fetching backlog items created since 2023-01-01â€¦");
             }
 
             string typeFilter = $" AND [System.WorkItemType] IN ({string.Join(", ", matchedTypes.Select(t => $"'{t}'"))})";
@@ -263,21 +263,20 @@ namespace ADO_Tools_WinUI.Services
                 wiql = $"SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project{dateFilter}{typeFilter} ORDER BY [System.Id]";
             }
 
-            StatusUpdated?.Invoke($"WIQL: {wiql}");
 
             var allItems = await tfsClient.QueryByWiqlAsync(
                 wiql,
                 progressCallback: (fetched, total) =>
                 {
-                    StatusUpdated?.Invoke($"Fetching work items… {fetched}/{total}");
+                    StatusUpdated?.Invoke($"Fetching work itemsâ€¦ {fetched}/{total}");
                 });
 
             StatusUpdated?.Invoke($"Fetched {allItems.Count} work items from Azure DevOps.");
 
             var needsEmbedding = _cache.GetItemsNeedingEmbedding(allItems);
             StatusUpdated?.Invoke(needsEmbedding.Count == 0
-                ? "Cache is up to date — no new embeddings needed."
-                : $"Embedding {needsEmbedding.Count} new/changed items ({_cache.Count} already cached)…");
+                ? $"Cache is up to date â€” no new embeddings needed. {_cache.Count} total items indexed."
+                : $"Embedding {needsEmbedding.Count} new/changed items ({_cache.Count} already cached)â€¦");
 
             if (needsEmbedding.Count > 0)
             {
@@ -295,8 +294,10 @@ namespace ADO_Tools_WinUI.Services
                 });
 
                 await _cache.SaveAsync();
-                StatusUpdated?.Invoke($"Cache saved — {_cache.Count} total items indexed.");
+                StatusUpdated?.Invoke($"Cache saved â€” added {needsEmbedding.Count} new items, {_cache.Count} total indexed.");
             }
+
+            return (needsEmbedding.Count, _cache.Count);
         }
 
         public List<SemanticSearchResult> Search(string queryText, int topN = 20, bool excludeDone = false, float minScore = 0.2f)
@@ -304,8 +305,13 @@ namespace ADO_Tools_WinUI.Services
             if (_cache == null || string.IsNullOrWhiteSpace(queryText))
                 return new List<SemanticSearchResult>();
 
+            // Extract quoted phrases for mandatory post-filtering
+            var requiredPhrases = ExtractQuotedPhrases(queryText);
+
+            // Use the full query (minus quote characters) for embedding so ranking stays relevant
+            string strippedQuery = queryText.Replace("\"", "");
             // Expand domain-specific terms so the model understands their technical meaning
-            string expandedQuery = ExpandDomainTerms(queryText);
+            string expandedQuery = ExpandDomainTerms(strippedQuery);
             float[] queryEmbedding = _embedder.GetEmbedding(expandedQuery);
             var entries = _cache.GetEntries(excludeDone);
 
@@ -331,9 +337,47 @@ namespace ADO_Tools_WinUI.Services
                     };
                 })
                 .Where(r => r.Score >= minScore)
+                .Where(r => MatchesRequiredPhrases(r.CacheEntry, requiredPhrases))
                 .OrderByDescending(r => r.Score)
                 .Take(topN)
                 .ToList();
+        }
+
+        /// <summary>
+        /// Extracts double-quoted phrases from a query string.
+        /// Example: 'crash "open dialog" bug' â†’ ["open dialog"]
+        /// </summary>
+        internal static List<string> ExtractQuotedPhrases(string query)
+        {
+            var phrases = new List<string>();
+            foreach (Match match in Regex.Matches(query, "\"([^\"]+)\""))
+            {
+                string phrase = match.Groups[1].Value.Trim();
+                if (phrase.Length > 0)
+                    phrases.Add(phrase);
+            }
+            return phrases;
+        }
+
+        /// <summary>
+        /// Returns true if the cache entry's searchable text contains ALL required phrases (case-insensitive).
+        /// </summary>
+        internal static bool MatchesRequiredPhrases(EmbeddingCacheEntry entry, List<string> requiredPhrases)
+        {
+            if (requiredPhrases.Count == 0)
+                return true;
+
+            string text = !string.IsNullOrWhiteSpace(entry.SearchableText)
+                ? entry.SearchableText
+                : entry.Title;
+
+            foreach (var phrase in requiredPhrases)
+            {
+                if (!text.Contains(phrase, StringComparison.OrdinalIgnoreCase))
+                    return false;
+            }
+
+            return true;
         }
 
         /// <summary>

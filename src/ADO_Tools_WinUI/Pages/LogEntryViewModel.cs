@@ -1,16 +1,15 @@
 using Microsoft.UI;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using Microsoft.UI;
 using Microsoft.UI.Xaml.Media;
 
 namespace ADO_Tools_WinUI.Pages
 {
     public class LogEntryViewModel : INotifyPropertyChanged
     {
-        private string _message;
-        private string _glyph;
-        private SolidColorBrush _glyphBrush;
+        private string _message = "";
+        private string _glyph = "";
+        private SolidColorBrush _glyphBrush = new(Colors.Gray);
 
         public string Message
         {
@@ -32,14 +31,14 @@ namespace ADO_Tools_WinUI.Pages
 
         public bool IsProgressEntry { get; set; }
 
-        public event PropertyChangedEventHandler PropertyChanged;
-        private void OnPropertyChanged([CallerMemberName] string name = null)
+        public event PropertyChangedEventHandler? PropertyChanged;
+        private void OnPropertyChanged([CallerMemberName] string? name = null)
             => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
         public static bool IsProgressMessage(string message)
             => message.StartsWith("Downloaded:", System.StringComparison.OrdinalIgnoreCase)
             || message.StartsWith("Windows Installer is running", System.StringComparison.OrdinalIgnoreCase)
-            || message.StartsWith("Windows Unistaller is running", System.StringComparison.OrdinalIgnoreCase);
+            || message.StartsWith("Windows Uninstaller is running", System.StringComparison.OrdinalIgnoreCase);
 
         public static (string glyph, SolidColorBrush brush) ClassifyMessage(string message)
         {

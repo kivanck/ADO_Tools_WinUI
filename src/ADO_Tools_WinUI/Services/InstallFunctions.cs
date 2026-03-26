@@ -34,7 +34,7 @@ namespace ADO_Tools.Services
         private string currentOperationLabel = "Windows Installer";
 
         /// <summary>Raised whenever a status message should be displayed to the user (log line).</summary>
-        public event Action<string> StatusUpdated;
+        public event Action<string>? StatusUpdated;
 
         /// <summary>Convenience method to raise <see cref="StatusUpdated"/> with the given message.</summary>
         public void UpdateStatus(string message)
@@ -50,7 +50,7 @@ namespace ADO_Tools.Services
         {
             installerCheckTimer = new DispatcherTimer();
             installerCheckTimer.Interval = TimeSpan.FromSeconds(5);
-            installerCheckTimer.Tick += InstallerCheckTimer_Tick;
+            installerCheckTimer.Tick += InstallerCheckTimer_Tick!;
         }
 
         /// <summary>
@@ -78,7 +78,7 @@ namespace ADO_Tools.Services
         /// Fires when the MSI installer state changes.
         /// Parameters: (bool isRunning, int elapsedSeconds, string operationLabel)
         /// </summary>
-        public event Action<bool, int, string> InstallerRunningChanged;
+        public event Action<bool, int, string>? InstallerRunningChanged;
 
         /// <summary>
         /// Called every 5 seconds while the timer is active.
@@ -149,7 +149,7 @@ namespace ADO_Tools.Services
 
                                 result.Add(new InstalledSoftwareInfo
                                 {
-                                    DisplayName = _displayName,
+                                    DisplayName = _displayName ?? "",
                                     DisplayVersion = _displayVersion ?? "Unknown",
                                     QuietUninstallString = _QuietUninstallString,
                                     MajorVersion = major,
@@ -392,7 +392,7 @@ namespace ADO_Tools.Services
         /// Extracts a version string (e.g. "23.09.02.015") from a setup file name using a regex pattern.
         /// Returns null if no matching version pattern is found.
         /// </summary>
-        public string ExtractVersionFromSetupFile(string setupFileName)
+        public string? ExtractVersionFromSetupFile(string setupFileName)
         {
             var match = Regex.Match(setupFileName, @"(\d{2}\.\d{2}\.\d{2}\.\d{3})");
             return match.Success ? match.Value : null;
@@ -489,13 +489,13 @@ namespace ADO_Tools.Services
         public class InstalledSoftwareInfo
         {
             /// <summary>Display name as shown in "Programs and Features" (e.g. "OpenRail Designer").</summary>
-            public string DisplayName { get; set; }
+            public string DisplayName { get; set; } = "";
 
             /// <summary>Full version string (e.g. "23.09.02.015").</summary>
-            public string DisplayVersion { get; set; }
+            public string DisplayVersion { get; set; } = "";
 
             /// <summary>Command line used to silently uninstall the product.</summary>
-            public string QuietUninstallString { get; set; }
+            public string QuietUninstallString { get; set; } = "";
 
             /// <summary>First component of the version (e.g. 23).</summary>
             public int MajorVersion { get; set; }

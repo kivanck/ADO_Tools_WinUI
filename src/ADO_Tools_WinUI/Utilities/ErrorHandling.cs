@@ -11,7 +11,7 @@ namespace ADO_Tools.Utilities
 {
     class ErrorHandling
     {
-        public void ErrorNoticeAsync(Exception exception, XamlRoot xamlRoot)
+        public async void ErrorNoticeAsync(Exception exception, XamlRoot xamlRoot)
         {
 
             Exception activeException = GetInnerMostException(exception);
@@ -21,9 +21,10 @@ namespace ADO_Tools.Utilities
             {
                 Title = "Error",
                 Content = errorMessage,
-                CloseButtonText = "OK"
+                CloseButtonText = "OK",
+                XamlRoot = xamlRoot
             };
-            errorDialog.ShowAsync();
+            await errorDialog.ShowAsync();
         }
 
         public static Exception[] GetInnerExceptions(Exception ex)

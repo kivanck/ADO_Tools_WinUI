@@ -914,22 +914,24 @@ namespace ADO_Tools_WinUI.Pages
                 settings.SearchAreaPath = areaPath;
                 settings.Save();
 
-                await _semanticSearch.BuildOrUpdateCacheAsync(
+                var (added, total) = await _semanticSearch.BuildOrUpdateCacheAsync(
                     _tfsRest,
                     settings.Organization,
                     settings.Project,
                     areaPath,
-                    progressCallback: (current, total) =>
+                    forceRebuild: true,
+                    progressCallback: (current, count) =>
                     {
                         DispatcherQueue.TryEnqueue(() =>
-                            lblCacheStatus.Text = $"Embedding {current}/{total}…");
+                            lblCacheStatus.Text = $"Embedding {current}/{count}…");
                     });
 
                 _bm25BacklogSearch = new Bm25SearchService();
                 _bm25BacklogSearch.BuildIndex(_semanticSearch.GetCacheEntries(false));
 
                 txtSemanticSearch.IsEnabled = true;
-                lblCacheStatus.Text = $"Ready — {_semanticSearch.CachedItemCount} items indexed (Semantic + BM25)";
+                lblCacheStatus.Text = $"Ready — added {added} new items, {total} total indexed (rebuilt, Semantic + BM25)";
+                UpdateCacheCountLabel();
             }
             catch (Exception ex)
             {
@@ -947,7 +949,7 @@ namespace ADO_Tools_WinUI.Pages
                     CloseButtonText = "OK",
                     XamlRoot = this.XamlRoot
                 }.ShowAsync();
-                lblCacheStatus.Text = "Index build failed";
+                lblCacheStatus.Text = "Index rebuild failed";
             }
 
             progressBar.IsIndeterminate = false;
@@ -1002,6 +1004,7 @@ namespace ADO_Tools_WinUI.Pages
             _listMode = ListMode.SearchBacklog;
             _lastSearchQuery = query;
             lblItemCount.Text = $"{results.Count} matches";
+            UpdateCacheCountLabel();
             UpdateContextBadge();
             progressBar.IsIndeterminate = false;
             progressBar.Visibility = Visibility.Collapsed;
@@ -1037,6 +1040,7 @@ namespace ADO_Tools_WinUI.Pages
             _listMode = ListMode.SearchBacklog;
             _lastSearchQuery = query;
             lblItemCount.Text = $"{results.Count} matches (BM25)";
+            UpdateCacheCountLabel();
             UpdateContextBadge();
             progressBar.IsIndeterminate = false;
             progressBar.Visibility = Visibility.Collapsed;
@@ -1115,10 +1119,10 @@ namespace ADO_Tools_WinUI.Pages
                     settings.Project,
                     areaPath,
                     forceRebuild: true,
-                    progressCallback: (current, total) =>
+                    progressCallback: (current, count) =>
                     {
                         DispatcherQueue.TryEnqueue(() =>
-                            lblCacheStatus.Text = $"Embedding {current}/{total}…");
+                            lblCacheStatus.Text = $"Embedding {current}/{count}…");
                     });
 
                 _bm25BacklogSearch = new Bm25SearchService();
@@ -1126,6 +1130,7 @@ namespace ADO_Tools_WinUI.Pages
 
                 txtSemanticSearch.IsEnabled = true;
                 lblCacheStatus.Text = $"Ready — {_semanticSearch.CachedItemCount} items indexed (rebuilt, Semantic + BM25)";
+                UpdateCacheCountLabel();
             }
             catch (Exception ex)
             {
@@ -1150,6 +1155,12 @@ namespace ADO_Tools_WinUI.Pages
             progressBar.Visibility = Visibility.Collapsed;
             btnBuildIndex.IsEnabled = true;
             btnForceRebuild.IsEnabled = true;
+        }
+
+        private void UpdateCacheCountLabel()
+        {
+            int count = _semanticSearch?.CachedItemCount ?? 0;
+            lblCacheCount.Text = count > 0 ? $"[{count} in cache]" : "";
         }
     }
 }

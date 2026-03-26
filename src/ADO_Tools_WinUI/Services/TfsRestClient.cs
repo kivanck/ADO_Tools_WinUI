@@ -56,24 +56,24 @@ namespace ADO_Tools.Services
                 if (node == null) return;
                 foreach (var q in node["value"] ?? Enumerable.Empty<JToken>())
                 {
-                    //var type = q["type"]?.ToString();
-                    var path = string.IsNullOrEmpty(parentPath) ? q["name"]?.ToString() : $"{parentPath}\\{q["name"]?.ToString()}";
+                    var name = q["name"]?.ToString() ?? "";
+                    var path = string.IsNullOrEmpty(parentPath) ? name : $"{parentPath}\\{name}";
                     if (q["queryType"] != null)
                     {
                         result.Add(new QueryDto
                         {
-                            Id = q["id"]?.ToString(),
-                            Name = q["name"]?.ToString(),
-                            Path = path,
-                            Wiql = q["_links"]?["wiql"]?["href"]?.ToString()
+                            Id = q["id"]?.ToString() ?? "",
+                            Name = name,
+                            Path = path ?? "",
+                            Wiql = q["_links"]?["wiql"]?["href"]?.ToString() ?? ""
                         });
                     }
-                    if (q["children"] != null && q["children"].Any())
+                    var children = q["children"];
+                    if (children != null && children.Any())
                     {
-                        foreach (var child in q["children"])
+                        foreach (var child in children)
                         {
-                            // child may be a folder or query; create a wrapper and recurse
-                            Walk(new JObject(new JProperty("value", new JArray(child))), path);
+                            Walk(new JObject(new JProperty("value", new JArray(child))), path ?? "");
                         }
                     }
                 }
@@ -126,7 +126,7 @@ namespace ADO_Tools.Services
                 .Where(c => !string.IsNullOrEmpty(c))
                 .ToList() ?? [];
 
-            var ids = json["workItems"]?.Select(x => (int?)x["id"])?.Where(i => i.HasValue)?.Select(i => i.Value).ToList();
+            var ids = json["workItems"]?.Select(x => (int?)x["id"])?.Where(i => i.HasValue)?.Select(i => i!.Value).ToList();
             if (ids == null || ids.Count == 0) return result;
 
             result.WorkItems = await FetchWorkItemsByIdsAsync(ids);
@@ -150,7 +150,7 @@ namespace ADO_Tools.Services
             }
             var json = JObject.Parse(await resp.Content.ReadAsStringAsync());
 
-            var ids = json["workItems"]?.Select(x => (int?)x["id"])?.Where(i => i.HasValue)?.Select(i => i.Value).ToList();
+            var ids = json["workItems"]?.Select(x => (int?)x["id"])?.Where(i => i.HasValue)?.Select(i => i!.Value).ToList();
             if (ids == null || ids.Count == 0) return list;
 
             return await FetchWorkItemsByIdsAsync(ids, progressCallback);
@@ -201,7 +201,7 @@ namespace ADO_Tools.Services
                 r2.EnsureSuccessStatusCode();
                 var j2 = JObject.Parse(await r2.Content.ReadAsStringAsync());
 
-                foreach (var wi in j2["value"])
+                foreach (var wi in j2["value"] ?? Enumerable.Empty<JToken>())
                 {
                     var dto = ParseWorkItem(wi);
 
@@ -235,15 +235,15 @@ namespace ADO_Tools.Services
 
             var dto = new WorkItemDto
             {
-                Id = wi["id"].Value<int>(),
-                Title = wi["fields"]?["System.Title"]?.ToString(),
-                State = wi["fields"]?["System.State"]?.ToString(),
+                Id = wi["id"]?.Value<int>() ?? 0,
+                Title = wi["fields"]?["System.Title"]?.ToString() ?? "",
+                State = wi["fields"]?["System.State"]?.ToString() ?? "",
                 CreatedBy = wi["fields"]?["System.CreatedBy"]?["displayName"]?.ToString()
-                            ?? wi["fields"]?["System.CreatedBy"]?.ToString(),
+                            ?? wi["fields"]?["System.CreatedBy"]?.ToString() ?? "",
                 CreatedDate = createdDate,
-                TypeName = wi["fields"]?["System.WorkItemType"]?.ToString(),
-                IterationPath = wi["fields"]?["System.IterationPath"]?.ToString(),
-                HtmlUrl = wi["_links"]?["html"]?["href"]?.ToString()
+                TypeName = wi["fields"]?["System.WorkItemType"]?.ToString() ?? "",
+                IterationPath = wi["fields"]?["System.IterationPath"]?.ToString() ?? "",
+                HtmlUrl = wi["_links"]?["html"]?["href"]?.ToString() ?? ""
             };
 
             // ?? 2. ChangedDate for incremental cache updates ????????????
@@ -307,13 +307,13 @@ namespace ADO_Tools.Services
             // Extract file attachment URLs and names for the download feature.
             if (wi["relations"] != null)
             {
-                foreach (var rel in wi["relations"])
+                foreach (var rel in wi["relations"]!)
                 {
                     if (rel["rel"]?.ToString() == "AttachedFile")
                     {
-                        var urlRef = rel["url"]?.ToString();
-                        var fileName = rel["attributes"]?["name"]?.ToString() ?? Path.GetFileName(urlRef ?? string.Empty);
-                        dto.Attachments.Add(new AttachmentDto { Url = urlRef, FileName = fileName });
+                        var urlRef = rel["url"]?.ToString() ?? "";
+                        var fileName = rel["attributes"]?["name"]?.ToString() ?? Path.GetFileName(urlRef);
+                        dto.Attachments.Add(new AttachmentDto { Url = urlRef, FileName = fileName ?? "" });
                     }
                 }
             }
