@@ -36,6 +36,8 @@ namespace ADO_Tools_WinUI.Pages
             else
                 dpCutoffDate.Date = new DateTimeOffset(2023, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
+            txtSearchResultColumns.Text = string.Join(", ", s.SearchResultColumns);
+
             UpdateSettingsCacheStatus();
         }
 
@@ -49,6 +51,13 @@ namespace ADO_Tools_WinUI.Pages
             s.DownloadFolder = txtDownloadFolder.Text.Trim();
             s.SearchAreaPath = txtSearchAreaPath.Text.Trim();
             s.SearchCutoffDate = dpCutoffDate.Date?.ToString("yyyy-MM-dd") ?? "2023-01-01";
+
+            var cols = txtSearchResultColumns.Text
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(c => c.Length > 0)
+                .ToList();
+            s.SearchResultColumns = cols.Count > 0 ? cols : s.SearchResultColumns;
+
             s.Save();
         }
 

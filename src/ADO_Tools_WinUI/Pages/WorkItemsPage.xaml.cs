@@ -320,6 +320,13 @@ namespace ADO_Tools_WinUI.Pages
                 ["System.IterationPath"] = entry.IterationPath
             };
 
+            // Add all cached fields for dynamic column display
+            foreach (var kvp in entry.Fields)
+            {
+                if (!fieldValues.ContainsKey(kvp.Key))
+                    fieldValues[kvp.Key] = kvp.Value;
+            }
+
             return new WorkItemRow
             {
                 Id = entry.WorkItemId,
@@ -342,7 +349,10 @@ namespace ADO_Tools_WinUI.Pages
         private void ApplyDynamicColumns(List<string> columns)
         {
             if (columns.Count == 0)
-                columns = DefaultColumns;
+            {
+                var configured = AppSettings.Default.SearchResultColumns;
+                columns = configured.Count > 0 ? configured : DefaultColumns;
+            }
 
             dataGridWorkItems.Columns.Clear();
 

@@ -118,6 +118,22 @@
 
             <MenuFlyoutSeparator Margin="0,16" />
 
+            <!-- Search Result Columns -->
+            <TextBlock Text="Search Result Columns"
+                       Style="{StaticResource SubtitleTextBlockStyle}"
+                       Margin="0,0,0,4" />
+            <TextBlock Text="Comma-separated ADO field reference names shown when displaying search and find-similar results. Use names like System.Id, System.Title, System.AreaPath, Microsoft.VSTS.Common.Priority, etc."
+                       TextWrapping="Wrap"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                       Margin="0,0,0,8" />
+            <TextBox x:Name="txtSearchResultColumns"
+                     Header="Columns"
+                     TextWrapping="Wrap"
+                     AcceptsReturn="False"
+                     PlaceholderText="System.Id, System.Title, System.State, System.AreaPath, ..." />
+
+            <MenuFlyoutSeparator Margin="0,16" />
+
             <!-- About -->
             <TextBlock Text="About"
                        Style="{StaticResource SubtitleTextBlockStyle}"

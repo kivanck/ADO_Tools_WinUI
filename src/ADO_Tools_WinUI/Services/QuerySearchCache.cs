@@ -269,7 +269,8 @@ namespace ADO_Tools_WinUI.Services
                 IterationPath = e.IterationPath,
                 HtmlUrl = e.HtmlUrl,
                 ChangedDate = e.ChangedDate,
-                SearchableText = e.SearchableText
+                SearchableText = e.SearchableText,
+                Fields = e.Fields
             }).ToList();
         }
 

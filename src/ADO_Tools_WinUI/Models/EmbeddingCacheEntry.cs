@@ -23,6 +23,13 @@ namespace ADO_Tools.Models
         public string? SearchableText { get; set; }
 
         /// <summary>
+        /// All string field values from the work item (e.g. AreaPath, Priority, Tags).
+        /// Used for dynamic column display in search results.
+        /// Empty for entries created before this field was added.
+        /// </summary>
+        public Dictionary<string, string> Fields { get; set; } = new();
+
+        /// <summary>
         /// Primary embedding (first chunk, or the single embedding for short items).
         /// Kept for backward compatibility with existing cache files.
         /// </summary>

@@ -28,6 +28,14 @@ namespace ADO_Tools_WinUI.Services
         public string ProductName { get; set; } = "";
         public string SearchAreaPath { get; set; } = "";
         public string SearchCutoffDate { get; set; } = "2023-01-01";
+        public List<string> SearchResultColumns { get; set; } = new()
+        {
+            "System.Id", "System.Title", "System.State",
+            "System.AreaPath", "Microsoft.VSTS.Common.Priority",
+            "Microsoft.VSTS.Common.Severity", "System.Tags",
+            "System.CreatedBy", "System.CreatedDate",
+            "System.WorkItemType", "System.IterationPath"
+        };
 
         public void Save()
         {

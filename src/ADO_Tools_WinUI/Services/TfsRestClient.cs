@@ -296,7 +296,8 @@ namespace ADO_Tools.Services
                     {
                         var urlRef = rel["url"]?.ToString() ?? "";
                         var fileName = rel["attributes"]?["name"]?.ToString() ?? Path.GetFileName(urlRef);
-                        dto.Attachments.Add(new AttachmentDto { Url = urlRef, FileName = fileName ?? "" });
+                        var resourceSize = rel["attributes"]?["resourceSize"]?.Value<long>() ?? 0;
+                        dto.Attachments.Add(new AttachmentDto { Url = urlRef, FileName = fileName ?? "", Length = resourceSize });
                     }
                 }
             }

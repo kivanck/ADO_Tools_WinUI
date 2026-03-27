@@ -106,6 +106,10 @@ namespace ADO_Tools_WinUI.Services
         {
             string changedDate = wi.Fields.TryGetValue("System.ChangedDate", out var cd) ? cd?.ToString() ?? "" : "";
 
+            var fieldStrings = new Dictionary<string, string>();
+            foreach (var kvp in wi.Fields)
+                fieldStrings[kvp.Key] = kvp.Value?.ToString() ?? "";
+
             _entries[wi.Id] = new EmbeddingCacheEntry
             {
                 WorkItemId = wi.Id,
@@ -118,6 +122,7 @@ namespace ADO_Tools_WinUI.Services
                 HtmlUrl = wi.HtmlUrl ?? "",
                 ChangedDate = changedDate,
                 SearchableText = searchableText,
+                Fields = fieldStrings,
                 Embedding = embeddings[0],
                 ExtraEmbeddings = embeddings.Count > 1 ? embeddings.Skip(1).ToList() : null
             };
