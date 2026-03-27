@@ -221,10 +221,8 @@ namespace ADO_Tools_WinUI.Services
                     StatusUpdated?.Invoke($"Loaded {_cache.Count} cached embeddings from disk.");
                 else
                     StatusUpdated?.Invoke("No existing cache found. Building from scratch…");
-                
             }
-            
-            StatusUpdated?.Invoke(_embedder.IsUsingGpu ? "Using GPU (DirectML)" : "Using CPU");
+
 
             // Discover actual type names in this project and match against our targets
             StatusUpdated?.Invoke("Discovering work item types…");
@@ -294,14 +292,23 @@ namespace ADO_Tools_WinUI.Services
             {
                 await Task.Run(() =>
                 {
-                    for (int i = 0; i < needsEmbedding.Count; i++)
+                    const int batchSize = 32;
+                    for (int batchStart = 0; batchStart < needsEmbedding.Count; batchStart += batchSize)
                     {
-                        var wi = needsEmbedding[i];
-                        string text = BuildSearchableText(wi);
-                        var chunkedEmbeddings = _embedder.GetChunkedEmbeddings(text);
-                        _cache.AddOrUpdate(wi, chunkedEmbeddings, text);
+                        var batch = needsEmbedding.Skip(batchStart).Take(batchSize).ToList();
 
-                        progressCallback?.Invoke(i + 1, needsEmbedding.Count);
+                        var searchableTexts = new List<string>();
+                        foreach (var wi in batch)
+                            searchableTexts.Add(BuildSearchableText(wi));
+
+                        var batchEmbeddings = _embedder.GetBatchedChunkedEmbeddings(searchableTexts);
+
+                        for (int i = 0; i < batch.Count; i++)
+                            _cache.AddOrUpdate(batch[i], batchEmbeddings[i], searchableTexts[i]);
+
+                        progressCallback?.Invoke(
+                            Math.Min(batchStart + batchSize, needsEmbedding.Count),
+                            needsEmbedding.Count);
                     }
                 });
 

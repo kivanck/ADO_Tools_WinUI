@@ -164,7 +164,6 @@
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <ComboBox
                                 x:Name="cmbSearchMode"
@@ -226,12 +225,6 @@
                                     <TextBlock Text="Update" />
                                 </StackPanel>
                             </Button>
-                            <TextBlock
-                                x:Name="lblCacheCount"
-                                Grid.Column="6"
-                                VerticalAlignment="Center"
-                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                Style="{StaticResource CaptionTextBlockStyle}" />
                         </Grid>
                         <TextBlock
                             x:Name="lblCacheStatus"

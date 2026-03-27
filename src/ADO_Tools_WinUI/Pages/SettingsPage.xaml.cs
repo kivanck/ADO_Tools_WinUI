@@ -232,5 +232,6 @@ namespace ADO_Tools_WinUI.Pages
                 return false;
             }
         }
-    }
-}
+
+            }
+        }

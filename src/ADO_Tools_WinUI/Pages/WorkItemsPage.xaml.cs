@@ -106,8 +106,7 @@ namespace ADO_Tools_WinUI.Pages
                     _bm25BacklogSearch.BuildIndex(_semanticSearch.GetCacheEntries(false));
 
                     txtSemanticSearch.IsEnabled = true;
-                    lblCacheStatus.Text = $"Loaded {_semanticSearch.CachedItemCount} items from cache (use Update to fetch new items)";
-                    UpdateCacheCountLabel();
+                    lblCacheStatus.Text = FormatCacheLabel($"{_semanticSearch.CachedItemCount} items in cache");
                 }
                 else
                 {
@@ -865,11 +864,6 @@ namespace ADO_Tools_WinUI.Pages
             TryLoadExistingCache();
         }
 
-        private void UpdateCacheCountLabel()
-        {
-            int count = _semanticSearch?.CachedItemCount ?? 0;
-            lblCacheCount.Text = count > 0 ? $"[{count} in cache]" : "";
-        }
 
         // ── Backlog Search (Semantic + BM25) ────────────────────────────
 
@@ -905,7 +899,7 @@ namespace ADO_Tools_WinUI.Pages
                 string cacheDir = Path.Combine(AppContext.BaseDirectory, "EmbeddingCache");
                 _semanticSearch = new SemanticSearchService(modelDir, cacheDir);
                 _semanticSearch.StatusUpdated += msg =>
-                    DispatcherQueue.TryEnqueue(() => lblCacheStatus.Text = msg);
+                DispatcherQueue.TryEnqueue(() => lblCacheStatus.Text = FormatCacheLabel(msg));
 
                 string areaPath = settings.SearchAreaPath?.Trim() ?? "";
 
@@ -917,17 +911,16 @@ namespace ADO_Tools_WinUI.Pages
                     progressCallback: (current, count) =>
                     {
                         DispatcherQueue.TryEnqueue(() =>
-                            lblCacheStatus.Text = $"Embedding {current}/{count}…");
+                            lblCacheStatus.Text = FormatCacheLabel($"Embedding {current}/{count}…"));
                     });
 
                 _bm25BacklogSearch = new Bm25SearchService();
                 _bm25BacklogSearch.BuildIndex(_semanticSearch.GetCacheEntries(false));
 
                 txtSemanticSearch.IsEnabled = true;
-                lblCacheStatus.Text = added > 0
-                    ? $"Ready — added {added} new items, {total} total indexed (Semantic + BM25)"
-                    : $"Ready — {total} items indexed, cache up to date (Semantic + BM25)";
-                UpdateCacheCountLabel();
+                lblCacheStatus.Text = FormatCacheLabel(added > 0
+                    ? $"Ready — added {added} new items, {total} total indexed"
+                    : $"Ready — {total} items indexed, cache up to date");
             }
             catch (Exception ex)
             {
@@ -986,7 +979,6 @@ namespace ADO_Tools_WinUI.Pages
             _listMode = ListMode.SearchBacklog;
             _lastSearchQuery = query;
             lblItemCount.Text = $"{results.Count} matches";
-            UpdateCacheCountLabel();
             UpdateContextBadge();
             progressBar.IsIndeterminate = false;
             progressBar.Visibility = Visibility.Collapsed;
@@ -1022,7 +1014,6 @@ namespace ADO_Tools_WinUI.Pages
             _listMode = ListMode.SearchBacklog;
             _lastSearchQuery = query;
             lblItemCount.Text = $"{results.Count} matches (BM25)";
-            UpdateCacheCountLabel();
             UpdateContextBadge();
             progressBar.IsIndeterminate = false;
             progressBar.Visibility = Visibility.Collapsed;
@@ -1097,6 +1088,14 @@ namespace ADO_Tools_WinUI.Pages
             lblItemCount.Text = $"{_workItemList.Count} items";
             UpdateContextBadge();
             HighlightRows();
+        }
+
+        private static string FormatCacheLabel(string message)
+        {
+            string path = AppSettings.Default.SearchAreaPath?.Trim() ?? "";
+            return string.IsNullOrEmpty(path)
+                ? message
+                : $"{message} | {path}";
         }
     }
 }
