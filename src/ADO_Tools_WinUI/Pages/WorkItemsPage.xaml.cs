@@ -106,6 +106,7 @@ namespace ADO_Tools_WinUI.Pages
                     _bm25BacklogSearch.BuildIndex(_semanticSearch.GetCacheEntries(false));
 
                     txtSemanticSearch.IsEnabled = true;
+                    btnFindSimilar.IsEnabled = true;
                     lblCacheStatus.Text = FormatCacheLabel($"{_semanticSearch.CachedItemCount} items in cache");
                 }
                 else
@@ -429,7 +430,7 @@ namespace ADO_Tools_WinUI.Pages
                 btnReadItems.IsEnabled = true;
                 btnDownloadSelected.IsEnabled = true;
                 btnDownloadSingle.IsEnabled = true;
-                btnCompare.IsEnabled = true;
+                btnFindSimilar.IsEnabled = _semanticSearch != null && _semanticSearch.IsReady;
                 btnUpdateIndex.IsEnabled = true;
             }
             catch (Exception ex)
@@ -438,7 +439,7 @@ namespace ADO_Tools_WinUI.Pages
                 btnReadItems.IsEnabled = false;
                 btnDownloadSelected.IsEnabled = false;
                 btnDownloadSingle.IsEnabled = false;
-                btnCompare.IsEnabled = false;
+                btnFindSimilar.IsEnabled = false;
                 btnUpdateIndex.IsEnabled = false;
             }
 
@@ -665,131 +666,122 @@ namespace ADO_Tools_WinUI.Pages
             progressBar.Visibility = Visibility.Collapsed;
         }
 
-        private async void BtnCompare_Click(object sender, RoutedEventArgs e)
+        private void DataGridWorkItems_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (_tfsRest == null || _queryList.Count == 0) return;
-
             var selected = dataGridWorkItems.SelectedItems.OfType<WorkItemRow>().FirstOrDefault();
-            if (selected == null)
+            if (selected != null)
+                txtFindSimilarId.Value = selected.Id;
+        }
+
+        private async void BtnFindSimilar_Click(object sender, RoutedEventArgs e)
+        {
+            if (_semanticSearch == null || !_semanticSearch.IsReady || _bm25BacklogSearch == null)
             {
-                ShowMessage("Select a work item to compare.");
+                ShowMessage("Build the search index first (Search tab \u2192 Update).", "Index Required");
                 return;
             }
 
-            // Look up the full work item; fetch from API if not in _workItemList (e.g. search results)
-            var workItem = _workItemList.FirstOrDefault(w => w.Id == selected.Id);
-            if (workItem == null)
+            int targetId = (int)txtFindSimilarId.Value;
+            if (targetId <= 0 || double.IsNaN(txtFindSimilarId.Value))
             {
-                try
-                {
-                    workItem = await _tfsRest.GetWorkItemAsync(selected.Id);
-                }
-                catch (Exception ex)
-                {
-                    ShowMessage($"Failed to fetch work item #{selected.Id}: {ex.Message}", "Error");
-                    return;
-                }
-            }
-            if (workItem == null)
-            {
-                ShowMessage($"Work item #{selected.Id} not found.");
+                ShowMessage("Enter a work item ID or select one from the grid.", "No Item Selected");
                 return;
             }
-
-            // Ask user which query to compare against
-            var queryCmb = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, PlaceholderText = "Select query" };
-            int defaultIndex = 0;
-            for (int i = 0; i < _queryList.Count; i++)
-            {
-                queryCmb.Items.Add(new ComboBoxItem { Content = _queryList[i].Path });
-                // Default to the currently selected query in the main combo box
-                if (cmbQueries.SelectedItem is ComboBoxItem currentItem
-                    && (string)currentItem.Content == _queryList[i].Path)
-                {
-                    defaultIndex = i;
-                }
-            }
-            if (queryCmb.Items.Count > 0) queryCmb.SelectedIndex = defaultIndex;
-
-            var panel = new StackPanel { Spacing = 12 };
-            panel.Children.Add(new TextBlock { Text = $"Finding items similar to #{workItem.Id}: {workItem.Title}", TextWrapping = TextWrapping.Wrap });
-            panel.Children.Add(queryCmb);
-
-            var setupDialog = new ContentDialog
-            {
-                Title = "Compare Work Items",
-                Content = panel,
-                PrimaryButtonText = "Find Similar",
-                CloseButtonText = "Cancel",
-                XamlRoot = this.XamlRoot
-            };
-
-            if (await setupDialog.ShowAsync() != ContentDialogResult.Primary) return;
-
-            var selectedQuery = queryCmb.SelectedItem as ComboBoxItem;
-            if (selectedQuery == null) return;
-            var queryPath = (string)selectedQuery.Content;
-            var q2 = _queryList.FirstOrDefault(x => x.Path == queryPath);
-            if (q2 == null) return;
 
             progressBar.IsIndeterminate = true;
             progressBar.Visibility = Visibility.Visible;
+            btnFindSimilar.IsEnabled = false;
 
-            List<WorkItemDto> compareItems;
             try
             {
-                string wiql = q2.Wiql ?? "";
-                var result = await _tfsRest.QueryWorkItemsAsync(wiql);
-                compareItems = result.WorkItems;
+                // Get the full work item — check the current list first, then fetch from API
+                var workItem = _workItemList.FirstOrDefault(w => w.Id == targetId);
+                if (workItem == null && _tfsRest != null)
+                    workItem = await _tfsRest.GetWorkItemAsync(targetId);
+
+                if (workItem == null)
+                {
+                    ShowMessage($"Work item #{targetId} not found.", "Not Found");
+                    return;
+                }
+
+                string sourceText = SemanticSearchService.BuildSearchableText(workItem);
+                bool excludeDone = chkExcludeDone.IsChecked == true;
+                int topN = (int)numTopResults.Value;
+
+                // Run both searches in parallel on background threads
+                var semanticTask = Task.Run(() =>
+                    _semanticSearch!.FindSimilar(workItem, topN: topN, excludeDone: excludeDone));
+                var bm25Task = Task.Run(() =>
+                    _bm25BacklogSearch!.Search(sourceText, topN: topN, excludeDone: excludeDone));
+
+                await Task.WhenAll(semanticTask, bm25Task);
+
+                var semanticResults = semanticTask.Result;
+                var bm25Results = bm25Task.Result;
+
+                // Reciprocal Rank Fusion (k=60)
+                const float rrfK = 60f;
+                var rrfScores = new Dictionary<int, float>();
+                var entryMap = new Dictionary<int, EmbeddingCacheEntry>();
+
+                for (int rank = 0; rank < semanticResults.Count; rank++)
+                {
+                    int id = semanticResults[rank].CacheEntry.WorkItemId;
+                    rrfScores[id] = 1f / (rrfK + rank + 1);
+                    entryMap[id] = semanticResults[rank].CacheEntry;
+                }
+
+                for (int rank = 0; rank < bm25Results.Count; rank++)
+                {
+                    int id = bm25Results[rank].CacheEntry.WorkItemId;
+                    if (rrfScores.ContainsKey(id))
+                        rrfScores[id] += 1f / (rrfK + rank + 1);
+                    else
+                        rrfScores[id] = 1f / (rrfK + rank + 1);
+                    entryMap.TryAdd(id, bm25Results[rank].CacheEntry);
+                }
+
+                var ranked = rrfScores
+                    .OrderByDescending(kvp => kvp.Value)
+                    .Take(topN)
+                    .ToList();
+
+                // Display results
+                ApplyDynamicColumns([]);
+                _rows.Clear();
+
+                // Source item first with [Source] tag
+                var sourceRow = BuildRow(workItem);
+                sourceRow.Title = $"[Source] {sourceRow.Title}";
+                sourceRow.FieldValues["System.Title"] = sourceRow.Title;
+                sourceRow.RowBackground = new SolidColorBrush(Windows.UI.Color.FromArgb(40, 202, 80, 16));
+                _rows.Add(sourceRow);
+
+                // Normalize RRF scores to percentage for display
+                float maxRrf = ranked.Count > 0 ? ranked[0].Value : 1f;
+                foreach (var (id, score) in ranked)
+                {
+                    if (!entryMap.TryGetValue(id, out var entry)) continue;
+                    float pct = score / maxRrf;
+                    _rows.Add(BuildRowFromCacheEntry(entry, $"[{pct:P0}]"));
+                }
+
+                _listMode = ListMode.Compare;
+                _lastCompareSource = $"#{workItem.Id} {workItem.Title}";
+                lblItemCount.Text = $"{ranked.Count} similar items";
+                UpdateContextBadge();
             }
             catch (Exception ex)
             {
-                ShowMessage("Failed to read query: " + ex.Message, "Error");
+                ShowMessage("Find similar failed: " + ex.Message, "Error");
+            }
+            finally
+            {
                 progressBar.IsIndeterminate = false;
                 progressBar.Visibility = Visibility.Collapsed;
-                return;
+                btnFindSimilar.IsEnabled = true;
             }
-
-            var comparer = new wordCompare();
-            var matches = new List<(WorkItemDto Item, int Score)>();
-
-            foreach (var candidate in compareItems)
-            {
-                if (candidate.Title == workItem.Title) continue;
-                int score = comparer.compareStrings(workItem.Title ?? "", candidate.Title ?? "");
-                if (score > 0)
-                    matches.Add((candidate, score));
-            }
-
-            matches = matches.OrderByDescending(m => m.Score).ToList();
-
-            // Show results in the main DataGrid
-            ApplyDynamicColumns([]);
-            _rows.Clear();
-
-            // Source item first with a [Source] tag
-            var sourceRow = BuildRow(workItem);
-            sourceRow.Title = $"[Source] {sourceRow.Title}";
-            sourceRow.FieldValues["System.Title"] = sourceRow.Title;
-            sourceRow.RowBackground = new SolidColorBrush(Windows.UI.Color.FromArgb(40, 202, 80, 16));
-            _rows.Add(sourceRow);
-
-            // Matched items with score prefix
-            foreach (var (item, score) in matches)
-            {
-                var matchRow = BuildRow(item);
-                matchRow.Title = $"[{score}] {matchRow.Title}";
-                matchRow.FieldValues["System.Title"] = matchRow.Title;
-                _rows.Add(matchRow);
-            }
-
-            _listMode = ListMode.Compare;
-            _lastCompareSource = $"#{workItem.Id} {workItem.Title}";
-            lblItemCount.Text = $"{matches.Count} similar items";
-            UpdateContextBadge();
-
-            progressBar.IsIndeterminate = false;
-            progressBar.Visibility = Visibility.Collapsed;
         }
 
         private void NumHighlightDays_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
@@ -918,6 +910,7 @@ namespace ADO_Tools_WinUI.Pages
                 _bm25BacklogSearch.BuildIndex(_semanticSearch.GetCacheEntries(false));
 
                 txtSemanticSearch.IsEnabled = true;
+                btnFindSimilar.IsEnabled = true;
                 lblCacheStatus.Text = FormatCacheLabel(added > 0
                     ? $"Ready — added {added} new items, {total} total indexed"
                     : $"Ready — {total} items indexed, cache up to date");

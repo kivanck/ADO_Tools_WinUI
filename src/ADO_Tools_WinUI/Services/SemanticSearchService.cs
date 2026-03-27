@@ -363,6 +363,49 @@ namespace ADO_Tools_WinUI.Services
         }
 
         /// <summary>
+        /// Finds work items semantically similar to a source work item.
+        /// Embeds the source item's full searchable text and compares against
+        /// all cached embeddings using cosine similarity.
+        /// </summary>
+        public List<SemanticSearchResult> FindSimilar(WorkItemDto sourceItem, int topN = 30, bool excludeDone = false, float minScore = 0.2f)
+        {
+            if (_cache == null) return new List<SemanticSearchResult>();
+
+            string sourceText = BuildSearchableText(sourceItem);
+            if (string.IsNullOrWhiteSpace(sourceText)) return new List<SemanticSearchResult>();
+
+            string expandedText = ExpandDomainTerms(sourceText);
+            float[] sourceEmbedding = _embedder.GetEmbedding(expandedText);
+            var entries = _cache.GetEntries(excludeDone);
+
+            return entries
+                .Where(entry => entry.WorkItemId != sourceItem.Id)
+                .Select(entry =>
+                {
+                    float bestScore = LocalEmbeddingService.CosineSimilarity(sourceEmbedding, entry.Embedding);
+
+                    if (entry.ExtraEmbeddings != null)
+                    {
+                        foreach (var extra in entry.ExtraEmbeddings)
+                        {
+                            float s = LocalEmbeddingService.CosineSimilarity(sourceEmbedding, extra);
+                            if (s > bestScore) bestScore = s;
+                        }
+                    }
+
+                    return new SemanticSearchResult
+                    {
+                        CacheEntry = entry,
+                        Score = bestScore
+                    };
+                })
+                .Where(r => r.Score >= minScore)
+                .OrderByDescending(r => r.Score)
+                .Take(topN)
+                .ToList();
+        }
+
+        /// <summary>
         /// Extracts double-quoted phrases from a query string.
         /// Example: 'crash "open dialog" bug' → ["open dialog"]
         /// </summary>

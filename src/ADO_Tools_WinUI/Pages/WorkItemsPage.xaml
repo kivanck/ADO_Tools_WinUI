@@ -266,22 +266,39 @@
                     </StackPanel>
                 </Button>
 
-                <Button
-                    x:Name="btnCompare"
+                <!--  Find Similar: ID input + button  -->
+                <StackPanel
                     Grid.Column="1"
+                    VerticalAlignment="Center"
+                    Orientation="Horizontal"
+                    Spacing="8">
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="Work Item" />
+                    <NumberBox
+                        x:Name="txtFindSimilarId"
+                        Width="120"
+                        PlaceholderText="e.g. 2011414"
+                        SpinButtonPlacementMode="Hidden"
+                        ToolTipService.ToolTip="Enter a work item ID or select one from the grid" />
+                </StackPanel>
+                <Button
+                    x:Name="btnFindSimilar"
+                    Grid.Column="2"
                     Height="32"
                     VerticalAlignment="Center"
-                    Click="BtnCompare_Click"
+                    Click="BtnFindSimilar_Click"
                     IsEnabled="False"
-                    ToolTipService.ToolTip="Find similar work items">
+                    ToolTipService.ToolTip="Find similar work items across the backlog using semantic + keyword search">
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <FontIcon FontSize="14" Glyph="&#xE721;" />
-                        <TextBlock Text="Compare" />
+                        <TextBlock Text="Find Similar" />
                     </StackPanel>
                 </Button>
 
                 <StackPanel
-                    Grid.Column="2"
+                    Grid.Column="3"
                     VerticalAlignment="Center"
                     Orientation="Horizontal"
                     Spacing="8">
@@ -417,6 +434,7 @@
                     GridLinesVisibility="Horizontal"
                     IsReadOnly="True"
                     SelectionMode="Extended"
+                    SelectionChanged="DataGridWorkItems_SelectionChanged"
                     Sorting="DataGridWorkItems_Sorting" />
             </Grid>
         </Border>
