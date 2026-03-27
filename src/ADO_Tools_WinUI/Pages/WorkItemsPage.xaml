@@ -172,7 +172,8 @@
                                 VerticalAlignment="Center"
                                 SelectedIndex="0"
                                 SelectionChanged="CmbSearchMode_SelectionChanged"
-                                ToolTipService.ToolTip="Semantic uses AI embeddings; Keyword uses BM25 word matching">
+                                ToolTipService.ToolTip="Hybrid combines semantic + keyword via rank fusion; Semantic uses AI embeddings; Keyword uses BM25 word matching">
+                                <ComboBoxItem Content="Hybrid (RRF)" />
                                 <ComboBoxItem Content="Semantic" />
                                 <ComboBoxItem Content="Keyword (BM25)" />
                             </ComboBox>

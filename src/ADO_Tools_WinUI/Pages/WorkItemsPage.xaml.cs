@@ -694,58 +694,69 @@ namespace ADO_Tools_WinUI.Pages
 
             try
             {
-                // Get the full work item — check the current list first, then fetch from API
+                // 3-tier lookup: current list → embedding cache → API
                 var workItem = _workItemList.FirstOrDefault(w => w.Id == targetId);
-                if (workItem == null && _tfsRest != null)
-                    workItem = await _tfsRest.GetWorkItemAsync(targetId);
+
+                string sourceText;
+                if (workItem != null)
+                {
+                    sourceText = SemanticSearchService.BuildSearchableText(workItem);
+                }
+                else
+                {
+                    // Try the embedding cache — allows fully offline Find Similar
+                    var cachedEntry = _semanticSearch.GetCacheEntries(false)
+                        .FirstOrDefault(e => e.WorkItemId == targetId);
+
+                    if (cachedEntry != null)
+                    {
+                        sourceText = cachedEntry.SearchableText ?? cachedEntry.Title;
+                        workItem = new WorkItemDto
+                        {
+                            Id = cachedEntry.WorkItemId,
+                            Title = cachedEntry.Title,
+                            State = cachedEntry.State,
+                            TypeName = cachedEntry.TypeName,
+                            CreatedBy = cachedEntry.CreatedBy,
+                            CreatedDate = cachedEntry.CreatedDate,
+                            IterationPath = cachedEntry.IterationPath,
+                            HtmlUrl = cachedEntry.HtmlUrl
+                        };
+                    }
+                    else if (_tfsRest != null)
+                    {
+                        workItem = await _tfsRest.GetWorkItemAsync(targetId);
+                        sourceText = workItem != null
+                            ? SemanticSearchService.BuildSearchableText(workItem)
+                            : "";
+                    }
+                    else
+                    {
+                        sourceText = "";
+                    }
+                }
 
                 if (workItem == null)
                 {
-                    ShowMessage($"Work item #{targetId} not found.", "Not Found");
+                    string reason = _tfsRest != null
+                        ? $"Work item #{targetId} does not exist."
+                        : $"Work item #{targetId} is not in the search index.\nConnect to a project to look up items outside the cached backlog.";
+                    ShowMessage(reason, "Not Found");
                     return;
                 }
-
-                string sourceText = SemanticSearchService.BuildSearchableText(workItem);
                 bool excludeDone = chkExcludeDone.IsChecked == true;
                 int topN = (int)numTopResults.Value;
 
                 // Run both searches in parallel on background threads
+                int fetchN = topN * 2;
                 var semanticTask = Task.Run(() =>
-                    _semanticSearch!.FindSimilar(workItem, topN: topN, excludeDone: excludeDone));
+                    _semanticSearch!.FindSimilar(workItem, topN: fetchN, excludeDone: excludeDone));
                 var bm25Task = Task.Run(() =>
-                    _bm25BacklogSearch!.Search(sourceText, topN: topN, excludeDone: excludeDone));
+                    _bm25BacklogSearch!.Search(sourceText, topN: fetchN, excludeDone: excludeDone));
 
                 await Task.WhenAll(semanticTask, bm25Task);
 
-                var semanticResults = semanticTask.Result;
-                var bm25Results = bm25Task.Result;
-
-                // Reciprocal Rank Fusion (k=60)
-                const float rrfK = 60f;
-                var rrfScores = new Dictionary<int, float>();
-                var entryMap = new Dictionary<int, EmbeddingCacheEntry>();
-
-                for (int rank = 0; rank < semanticResults.Count; rank++)
-                {
-                    int id = semanticResults[rank].CacheEntry.WorkItemId;
-                    rrfScores[id] = 1f / (rrfK + rank + 1);
-                    entryMap[id] = semanticResults[rank].CacheEntry;
-                }
-
-                for (int rank = 0; rank < bm25Results.Count; rank++)
-                {
-                    int id = bm25Results[rank].CacheEntry.WorkItemId;
-                    if (rrfScores.ContainsKey(id))
-                        rrfScores[id] += 1f / (rrfK + rank + 1);
-                    else
-                        rrfScores[id] = 1f / (rrfK + rank + 1);
-                    entryMap.TryAdd(id, bm25Results[rank].CacheEntry);
-                }
-
-                var ranked = rrfScores
-                    .OrderByDescending(kvp => kvp.Value)
-                    .Take(topN)
-                    .ToList();
+                var merged = MergeByReciprocalRankFusion(semanticTask.Result, bm25Task.Result, topN);
 
                 // Display results
                 ApplyDynamicColumns([]);
@@ -758,18 +769,12 @@ namespace ADO_Tools_WinUI.Pages
                 sourceRow.RowBackground = new SolidColorBrush(Windows.UI.Color.FromArgb(40, 202, 80, 16));
                 _rows.Add(sourceRow);
 
-                // Normalize RRF scores to percentage for display
-                float maxRrf = ranked.Count > 0 ? ranked[0].Value : 1f;
-                foreach (var (id, score) in ranked)
-                {
-                    if (!entryMap.TryGetValue(id, out var entry)) continue;
-                    float pct = score / maxRrf;
-                    _rows.Add(BuildRowFromCacheEntry(entry, $"[{pct:P0}]"));
-                }
+                foreach (var (entry, score) in merged)
+                    _rows.Add(BuildRowFromCacheEntry(entry, $"[{score:P0}]"));
 
                 _listMode = ListMode.Compare;
                 _lastCompareSource = $"#{workItem.Id} {workItem.Title}";
-                lblItemCount.Text = $"{ranked.Count} similar items";
+                lblItemCount.Text = $"{merged.Count} similar items";
                 UpdateContextBadge();
             }
             catch (Exception ex)
@@ -928,18 +933,109 @@ namespace ADO_Tools_WinUI.Pages
         private void CmbSearchMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (txtSemanticSearch == null) return;
-            txtSemanticSearch.PlaceholderText = cmbSearchMode.SelectedIndex == 1
-                ? "Search by keywords \u2014 e.g. 'cant points'\u2026"
-                : "Search by meaning \u2014 e.g. 'crash when opening large files'\u2026";
+            txtSemanticSearch.PlaceholderText = cmbSearchMode.SelectedIndex switch
+            {
+                2 => "Search by keywords \u2014 e.g. 'cant points'\u2026",
+                1 => "Search by meaning \u2014 e.g. 'crash when opening large files'\u2026",
+                _ => "Search by meaning + keywords \u2014 e.g. 'cant not in reports'\u2026"
+            };
         }
 
         private async void TxtSemanticSearch_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
         {
-            bool useKeyword = cmbSearchMode.SelectedIndex == 1;
-            if (useKeyword)
-                await RunBm25BacklogSearchAsync();
-            else
-                await RunSemanticSearchAsync();
+            switch (cmbSearchMode.SelectedIndex)
+            {
+                case 2: await RunBm25BacklogSearchAsync(); break;
+                case 1: await RunSemanticSearchAsync(); break;
+                default: await RunHybridBacklogSearchAsync(); break;
+            }
+        }
+
+        /// <summary>
+        /// Merges two ranked result lists using Reciprocal Rank Fusion (k=60).
+        /// Items found by both lists get boosted; items in only one still appear.
+        /// Returns (entry, normalizedScore) pairs ordered by fused score.
+        /// </summary>
+        private static List<(EmbeddingCacheEntry Entry, float Score)> MergeByReciprocalRankFusion(
+            List<SemanticSearchResult> semanticResults,
+            List<Bm25SearchResult> bm25Results,
+            int topN)
+        {
+            const float rrfK = 60f;
+            var rrfScores = new Dictionary<int, float>();
+            var entryMap = new Dictionary<int, EmbeddingCacheEntry>();
+
+            for (int rank = 0; rank < semanticResults.Count; rank++)
+            {
+                int id = semanticResults[rank].CacheEntry.WorkItemId;
+                rrfScores[id] = 1f / (rrfK + rank + 1);
+                entryMap[id] = semanticResults[rank].CacheEntry;
+            }
+
+            for (int rank = 0; rank < bm25Results.Count; rank++)
+            {
+                int id = bm25Results[rank].CacheEntry.WorkItemId;
+                if (rrfScores.ContainsKey(id))
+                    rrfScores[id] += 1f / (rrfK + rank + 1);
+                else
+                    rrfScores[id] = 1f / (rrfK + rank + 1);
+                entryMap.TryAdd(id, bm25Results[rank].CacheEntry);
+            }
+
+            var ranked = rrfScores
+                .OrderByDescending(kvp => kvp.Value)
+                .Take(topN)
+                .ToList();
+
+            float maxRrf = ranked.Count > 0 ? ranked[0].Value : 1f;
+            return ranked
+                .Where(kvp => entryMap.ContainsKey(kvp.Key))
+                .Select(kvp => (entryMap[kvp.Key], kvp.Value / maxRrf))
+                .ToList();
+        }
+
+        private async Task RunHybridBacklogSearchAsync()
+        {
+            if (_semanticSearch == null || !_semanticSearch.IsReady
+                || _bm25BacklogSearch == null || _bm25BacklogSearch.DocumentCount == 0)
+                return;
+
+            string query = txtSemanticSearch.Text?.Trim() ?? "";
+            if (string.IsNullOrEmpty(query))
+            {
+                BtnClearSearch_Click(null!, null!);
+                return;
+            }
+
+            progressBar.IsIndeterminate = true;
+            progressBar.Visibility = Visibility.Visible;
+
+            bool excludeDone = chkExcludeDone.IsChecked == true;
+            int topN = (int)numTopResults.Value;
+            // Fetch more candidates from each engine so RRF has enough overlap
+            int fetchN = topN * 2;
+
+            var semanticTask = Task.Run(() =>
+                _semanticSearch.Search(query, fetchN, excludeDone));
+            var bm25Task = Task.Run(() =>
+                _bm25BacklogSearch.Search(query, fetchN, excludeDone));
+
+            await Task.WhenAll(semanticTask, bm25Task);
+
+            var merged = MergeByReciprocalRankFusion(semanticTask.Result, bm25Task.Result, topN);
+
+            ApplyDynamicColumns([]);
+
+            _rows.Clear();
+            foreach (var (entry, score) in merged)
+                _rows.Add(BuildRowFromCacheEntry(entry, $"[{score:P0}]"));
+
+            _listMode = ListMode.SearchBacklog;
+            _lastSearchQuery = query;
+            lblItemCount.Text = $"{merged.Count} matches (hybrid)";
+            UpdateContextBadge();
+            progressBar.IsIndeterminate = false;
+            progressBar.Visibility = Visibility.Collapsed;
         }
 
         private async Task RunSemanticSearchAsync()
