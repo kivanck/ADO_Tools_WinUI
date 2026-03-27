@@ -437,24 +437,36 @@ namespace ADO_Tools_WinUI.Services
             if (!string.IsNullOrWhiteSpace(wi.Title))
                 parts.Add(wi.Title);
 
-            string[] richFields =
+            // Rich-text field suffixes that contribute meaningful search content.
+            // Matched by suffix so they work regardless of prefix
+            // (Custom.*, beconnect-test.*, Microsoft.VSTS.Common.*, etc.)
+            // Note: System.History is excluded — it only returns the latest revision.
+            // Full discussion threads are captured via _CommentsCombined instead.
+            var richFieldSuffixes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
-                "System.Description",
-                "Microsoft.VSTS.TCM.ReproSteps",
-                "Microsoft.VSTS.TCM.SystemInfo",
-                "Microsoft.VSTS.Common.AcceptanceCriteria",
-                "Microsoft.VSTS.Common.FixDetails",
-                "System.History",
-                "Custom.InvestigationNotes",
-                "Custom.Notes",
-                "Custom.ProductAffected",
-                "Custom.DefectSource_EA",
+                "Description",
+                "ReproSteps",
+                "SystemInfo",
+                "AcceptanceCriteria",
+                "FixDetails",
+                "InvestigationNotes",
+                "TestingNotes",
+                "Notes",
                 "_CommentsCombined"
             };
 
-            foreach (var fieldName in richFields)
+            foreach (var kvp in wi.Fields)
             {
-                if (wi.Fields.TryGetValue(fieldName, out var val) && val is string s && !string.IsNullOrWhiteSpace(s))
+                // Extract suffix: "beconnect-test.FixDetails" → "FixDetails"
+                string suffix = kvp.Key;
+                int lastDot = kvp.Key.LastIndexOf('.');
+                if (lastDot >= 0 && lastDot < kvp.Key.Length - 1)
+                    suffix = kvp.Key[(lastDot + 1)..];
+
+                if (!richFieldSuffixes.Contains(suffix))
+                    continue;
+
+                if (kvp.Value is string s && !string.IsNullOrWhiteSpace(s))
                     parts.Add(StripHtml(s));
             }
 
@@ -464,7 +476,13 @@ namespace ADO_Tools_WinUI.Services
         internal static string StripHtml(string html)
         {
             if (string.IsNullOrEmpty(html)) return "";
-            return Regex.Replace(html, "<.*?>", " ").Trim();
+            // Remove all HTML tags
+            var text = Regex.Replace(html, "<.*?>", " ");
+            // Decode HTML entities (&nbsp; → space, &quot; → ", &amp; → &, etc.)
+            text = System.Net.WebUtility.HtmlDecode(text);
+            // Collapse multiple whitespace into single spaces
+            text = Regex.Replace(text, @"\s+", " ");
+            return text.Trim();
         }
 
         public bool IsReady => _cache != null && _cache.Count > 0;

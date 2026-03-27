@@ -192,7 +192,7 @@ namespace ADO_Tools.Services
         {
             var list = new List<WorkItemDto>();
             var chunkSize = 100;
-            var commentsCutoff = new DateTime(2024, 1, 1);
+            var commentsCutoff = new DateTime(2023, 1, 1);
             int totalIds = ids.Count;
 
             for (int i = 0; i < ids.Count; i += chunkSize)
@@ -208,9 +208,11 @@ namespace ADO_Tools.Services
                 {
                     var dto = ParseWorkItem(wi);
 
-                    // Fetch discussion comments only for recent items with meaningful discussion
+                    // Fetch discussion comments for recent items.
+                    // System.History only returns the latest revision, so we rely on
+                    // the Comments API for full discussion threads.
                     int commentCount = wi["fields"]?["System.CommentCount"]?.Value<int>() ?? 0;
-                    if (commentCount > 1 && dto.CreatedDate >= commentsCutoff)
+                    if (commentCount > 0 && dto.CreatedDate >= commentsCutoff)
                     {
                         var comments = await GetWorkItemCommentsAsync(dto.Id);
                         if (comments.Count > 0)
@@ -227,7 +229,7 @@ namespace ADO_Tools.Services
 
         private static WorkItemDto ParseWorkItem(JToken wi)
         {
-            // ?? 1. Core typed properties ????????????????????????????????
+            // §1. Core typed properties
             // These are stored as typed properties on WorkItemDto and persisted
             // into EmbeddingCacheEntry / QueryCacheEntry for backlog & query search.
             // They provide the minimal metadata needed for display and caching.
@@ -249,39 +251,17 @@ namespace ADO_Tools.Services
                 HtmlUrl = wi["_links"]?["html"]?["href"]?.ToString() ?? ""
             };
 
-            // ?? 2. ChangedDate for incremental cache updates ????????????
+            // §2. ChangedDate for incremental cache updates
             // Used by EmbeddingCache and QuerySearchCache to detect whether
             // a work item has been modified since the last cache build.
             dto.Fields["System.ChangedDate"] = wi["fields"]?["System.ChangedDate"]?.ToString() ?? "";
 
-            // ?? 3. Rich-text fields for semantic / BM25 search ??????????
-            // These HTML-heavy fields are stripped to plain text and combined
-            // into SearchableText by SemanticSearchService.BuildSearchableText().
-            string[] searchFields =
-            {
-                "System.Description",
-                "Microsoft.VSTS.TCM.ReproSteps",
-                "Microsoft.VSTS.TCM.SystemInfo",
-                "Microsoft.VSTS.Common.AcceptanceCriteria",
-                "Microsoft.VSTS.Common.FixDetails",
-                "System.History",
-                "Custom.InvestigationNotes",
-                "Custom.Notes",
-                "Custom.ProductAffected",
-                "Custom.DefectSource_EA"
-            };
-            foreach (var fieldName in searchFields)
-            {
-                var val = wi["fields"]?[fieldName]?.ToString();
-                if (!string.IsNullOrEmpty(val))
-                    dto.Fields[fieldName] = val;
-            }
-
-            // ?? 4. All remaining fields for dynamic query column display ?
-            // The ADO API returns every field in the JSON response. This loop
-            // captures anything not already stored above, so that when a query
-            // defines columns like AssignedTo, Priority, Tags, etc., the values
-            // are available in dto.Fields ? WorkItemRow.FieldValues ? DataGrid.
+            // §3. All fields from the API response
+            // The ADO API only returns fields that have a value — empty/null fields
+            // are simply absent from the JSON, which is by-design API behavior.
+            // We capture everything returned here. BuildSearchableText() selects
+            // the relevant rich-text fields using suffix matching (so prefix
+            // differences like Custom.* vs beconnect-test.* don't matter).
             if (wi["fields"] is JObject allFields)
             {
                 foreach (var prop in allFields.Properties())
