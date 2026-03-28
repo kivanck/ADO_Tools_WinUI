@@ -236,43 +236,68 @@
             </Pivot>
         </Border>
 
-        <!--  ROW 2 — Shared Actions Toolbar  -->
-        <Border
-            Grid.Row="2"
-            Padding="16,8"
-            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-            BorderThickness="1"
-            CornerRadius="8">
-            <Grid ColumnSpacing="10">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
+        <!--  ROW 2 — Actions Toolbar (two cards side by side)  -->
+        <Grid Grid.Row="2" ColumnSpacing="4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
 
-                <Button
-                    x:Name="btnDownloadSelected"
-                    Grid.Column="0"
-                    Height="32"
-                    VerticalAlignment="Center"
-                    Click="BtnDownloadSelected_Click"
-                    IsEnabled="False">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <FontIcon FontSize="14" Glyph="&#xE896;" />
-                        <TextBlock Text="Download Selected" />
+            <!--  Left card: Grid selection actions  -->
+            <Border
+                Grid.Column="0"
+                Padding="16,8"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="8">
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <Button
+                        x:Name="btnDownloadSelected"
+                        Height="32"
+                        VerticalAlignment="Center"
+                        Click="BtnDownloadSelected_Click"
+                        IsEnabled="False"
+                        ToolTipService.ToolTip="Download attachments for selected items in the grid">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon FontSize="14" Glyph="&#xE896;" />
+                            <TextBlock x:Name="lblDownloadSelectedText" Text="Download Selected" />
+                        </StackPanel>
+                    </Button>
+
+                    <StackPanel
+                        VerticalAlignment="Center"
+                        Orientation="Horizontal"
+                        Spacing="6">
+                        <TextBlock
+                            VerticalAlignment="Center"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="Highlight" />
+                        <NumberBox
+                            x:Name="numHighlightDays"
+                            Width="90"
+                            Maximum="365"
+                            Minimum="0"
+                            SpinButtonPlacementMode="Compact"
+                            ValueChanged="NumHighlightDays_ValueChanged"
+                            Value="5" />
+                        <TextBlock
+                            VerticalAlignment="Center"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="days" />
                     </StackPanel>
-                </Button>
+                </StackPanel>
+            </Border>
 
-                <!--  Find Similar: ID input + button  -->
-                <StackPanel
-                    Grid.Column="1"
-                    VerticalAlignment="Center"
-                    Orientation="Horizontal"
-                    Spacing="8">
+            <!--  Right card: Single item actions (by ID)  -->
+            <Border
+                Grid.Column="1"
+                Padding="16,8"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="8">
+                <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
                     <TextBlock
                         VerticalAlignment="Center"
                         Style="{StaticResource CaptionTextBlockStyle}"
@@ -283,83 +308,32 @@
                         PlaceholderText="e.g. 2011414"
                         SpinButtonPlacementMode="Hidden"
                         ToolTipService.ToolTip="Enter a work item ID or select one from the grid" />
-                </StackPanel>
-                <Button
-                    x:Name="btnFindSimilar"
-                    Grid.Column="2"
-                    Height="32"
-                    VerticalAlignment="Center"
-                    Click="BtnFindSimilar_Click"
-                    IsEnabled="False"
-                    ToolTipService.ToolTip="Find similar work items across the backlog using semantic + keyword search">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <FontIcon FontSize="14" Glyph="&#xE721;" />
-                        <TextBlock Text="Find Similar" />
-                    </StackPanel>
-                </Button>
 
-                <StackPanel
-                    Grid.Column="3"
-                    VerticalAlignment="Center"
-                    Orientation="Horizontal"
-                    Spacing="8">
-                    <Border
-                        Width="22"
-                        Height="22"
+                    <Button
+                        x:Name="btnFindSimilar"
+                        Height="32"
                         VerticalAlignment="Center"
-                        Background="#CA5010"
-                        CornerRadius="4">
-                        <FontIcon
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center"
-                            FontSize="11"
-                            Foreground="White"
-                            Glyph="&#xE7E6;" />
-                    </Border>
-                    <TextBlock
-                        VerticalAlignment="Center"
-                        Style="{StaticResource CaptionTextBlockStyle}"
-                        Text="Highlight days" />
-                    <NumberBox
-                        x:Name="numHighlightDays"
-                        Width="100"
-                        Maximum="365"
-                        Minimum="0"
-                        SpinButtonPlacementMode="Compact"
-                        ValueChanged="NumHighlightDays_ValueChanged"
-                        Value="5" />
-                </StackPanel>
+                        Click="BtnFindSimilar_Click"
+                        IsEnabled="False"
+                        ToolTipService.ToolTip="Find similar work items across the backlog using semantic + keyword search">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon FontSize="14" Glyph="&#xE721;" />
+                            <TextBlock Text="Find Similar" />
+                        </StackPanel>
+                    </Button>
 
-                <!--  Single item download  -->
-                <StackPanel
-                    Grid.Column="4"
-                    VerticalAlignment="Center"
-                    Orientation="Horizontal"
-                    Spacing="8">
-                    <TextBlock
+                    <Button
+                        x:Name="btnDownloadSingle"
+                        Height="32"
                         VerticalAlignment="Center"
-                        Style="{StaticResource CaptionTextBlockStyle}"
-                        Text="Item ID" />
-                    <NumberBox
-                        x:Name="txtSingleItemId"
-                        Width="120"
-                        PlaceholderText="e.g. 102654"
-                        SpinButtonPlacementMode="Hidden" />
-                </StackPanel>
-                <Button
-                    x:Name="btnDownloadSingle"
-                    Grid.Column="5"
-                    Height="32"
-                    VerticalAlignment="Center"
-                    Click="BtnDownloadSingle_Click"
-                    IsEnabled="False">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        Click="BtnDownloadSingle_Click"
+                        IsEnabled="False"
+                        ToolTipService.ToolTip="Download attachments for this work item">
                         <FontIcon FontSize="14" Glyph="&#xE896;" />
-                        <TextBlock Text="Download Single" />
-                    </StackPanel>
-                </Button>
-            </Grid>
-        </Border>
+                    </Button>
+                </StackPanel>
+            </Border>
+        </Grid>
 
         <!--  ROW 3 — Work Items Data Grid  -->
         <Border

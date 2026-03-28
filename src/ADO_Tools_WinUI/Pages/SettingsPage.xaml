@@ -100,7 +100,7 @@
                         Style="{StaticResource AccentButtonStyle}">
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <FontIcon FontSize="14" Glyph="&#xEBD3;" />
-                        <TextBlock Text="Build Index" />
+                        <TextBlock Text="Update Index" />
                     </StackPanel>
                 </Button>
                 <Button x:Name="btnSettingsForceRebuild"

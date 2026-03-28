@@ -627,8 +627,8 @@ namespace ADO_Tools_WinUI.Pages
         private async void BtnDownloadSingle_Click(object sender, RoutedEventArgs e)
         {
             if (_tfsRest == null) return;
-            if (double.IsNaN(txtSingleItemId.Value)) return;
-            int elementId = (int)txtSingleItemId.Value;
+            if (double.IsNaN(txtFindSimilarId.Value)) return;
+            int elementId = (int)txtFindSimilarId.Value;
 
             progressBar.IsIndeterminate = true;
             progressBar.Visibility = Visibility.Visible;
@@ -678,9 +678,17 @@ namespace ADO_Tools_WinUI.Pages
 
         private void DataGridWorkItems_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            var selected = dataGridWorkItems.SelectedItems.OfType<WorkItemRow>().FirstOrDefault();
-            if (selected != null)
-                txtFindSimilarId.Value = selected.Id;
+            // Guard against events firing during _rows.Clear() or before UI is initialized
+            if (dataGridWorkItems == null) return;
+
+            var selectedItems = dataGridWorkItems.SelectedItems.OfType<WorkItemRow>().ToList();
+            var first = selectedItems.FirstOrDefault();
+            if (first != null)
+                txtFindSimilarId.Value = first.Id;
+
+            lblDownloadSelectedText.Text = selectedItems.Count > 0
+                ? $"Download Selected ({selectedItems.Count})"
+                : "Download Selected";
         }
 
         private async void BtnFindSimilar_Click(object sender, RoutedEventArgs e)
