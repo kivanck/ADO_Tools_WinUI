@@ -1,4 +1,4 @@
-using Newtonsoft.Json;
+ï»¿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
@@ -7,6 +7,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using ADO_Tools.Models;
 
@@ -108,7 +109,7 @@ namespace ADO_Tools.Services
             string projectName = orgBase[(lastSlash + 1)..];
             string orgUrl = orgBase[..lastSlash];
 
-            // Get the project GUID — needed for favorites API scope
+            // Get the project GUID â€” needed for favorites API scope
             string projectId = "";
             try
             {
@@ -126,7 +127,7 @@ namespace ADO_Tools.Services
 
             try
             {
-                // Personal favorites — project-scoped
+                // Personal favorites â€” project-scoped
                 // This API returns favorites owned by the authenticated user (PAT owner)
                 string myFavUrl = $"{orgUrl}/_apis/Favorite/Favorites?artifactType=Microsoft.TeamFoundation.WorkItemTracking.QueryItem&artifactScopeType=Project&artifactScopeId={projectId}&api-version=7.1-preview.1";
                 var myResp = await _http.GetAsync(myFavUrl);
@@ -153,11 +154,11 @@ namespace ADO_Tools.Services
             // Azure DevOps team favorites are NOT accessible via REST API with PAT authentication.
             // 
             // APIs tested that DO NOT work with PAT:
-            // 1. Favorites API with artifactScopeType=Team — returns empty
-            // 2. Favorites API with ownerType=Team&ownerId={teamId} — ignored, returns user's favorites
-            // 3. Favorites API with identityId={teamId} — ignored, returns user's favorites  
-            // 4. Favorites API with team's subjectDescriptor — ignored, returns user's favorites
-            // 5. Queries API with $filter=favorites&$team={teamId} — requires team membership, limited
+            // 1. Favorites API with artifactScopeType=Team â€” returns empty
+            // 2. Favorites API with ownerType=Team&ownerId={teamId} â€” ignored, returns user's favorites
+            // 3. Favorites API with identityId={teamId} â€” ignored, returns user's favorites  
+            // 4. Favorites API with team's subjectDescriptor â€” ignored, returns user's favorites
+            // 5. Queries API with $filter=favorites&$team={teamId} â€” requires team membership, limited
             //
             // The ONLY way to access team favorites is via the Contribution API:
             //   POST _apis/Contribution/HierarchyQuery
@@ -219,7 +220,7 @@ namespace ADO_Tools.Services
             }
             else if (isFolder && hasChildren)
             {
-                // Folder has children beyond the initial depth — fetch them
+                // Folder has children beyond the initial depth â€” fetch them
                 try
                 {
                     string folderUrl = $"{baseUrl}/wit/queries/{dto.Id}?$depth=2&$expand=minimal&api-version=7.1-preview.2";
@@ -277,7 +278,7 @@ namespace ADO_Tools.Services
                     .ToList();
             }
 
-            // Tree / one-hop queries — extract unique IDs from source and target
+            // Tree / one-hop queries â€” extract unique IDs from source and target
             var relations = json["workItemRelations"];
             if (relations is not JArray relArray || relArray.Count == 0) return [];
 
@@ -296,7 +297,7 @@ namespace ADO_Tools.Services
 
         /// <summary>
         /// Executes a saved query and returns only the matching work item IDs and column definitions.
-        /// Does NOT fetch full work item data — use this for incremental cache scenarios.
+        /// Does NOT fetch full work item data â€” use this for incremental cache scenarios.
         /// </summary>
         public async Task<QueryExecutionResult> ExecuteQueryAsync(string savedQueryUrl)
         {
@@ -338,7 +339,7 @@ namespace ADO_Tools.Services
             return result;
         }
 
-        public async Task<WiqlQueryResult> QueryByWiqlAsync(string wiql, int top = 20000, Action<int, int>? progressCallback = null)
+        public async Task<WiqlQueryResult> QueryByWiqlAsync(string wiql, int top = 20000, Action<int, int>? progressCallback = null, Action<string>? statusCallback = null)
         {
             var result = new WiqlQueryResult();
             if (string.IsNullOrWhiteSpace(wiql)) return result;
@@ -360,7 +361,7 @@ namespace ADO_Tools.Services
 
             result.TotalIdsReturned = ids.Count;
             result.QueryLimitHit = ids.Count >= top;
-            result.WorkItems = await FetchWorkItemsByIdsAsync(ids, progressCallback);
+            result.WorkItems = await FetchWorkItemsByIdsAsync(ids, progressCallback, statusCallback);
             return result;
         }
 
@@ -368,10 +369,11 @@ namespace ADO_Tools.Services
         /// Lightweight batch fetch that returns only (Id, ChangedDate) for each work item.
         /// Uses $select to avoid downloading all fields/relations/comments.
         /// </summary>
-        public async Task<Dictionary<int, string>> FetchWorkItemChangedDatesAsync(List<int> ids)
+        public async Task<Dictionary<int, string>> FetchWorkItemChangedDatesAsync(List<int> ids, Action<int, int>? progressCallback = null)
         {
             var result = new Dictionary<int, string>();
             var chunkSize = 200; // larger chunks are fine for lightweight calls
+            int totalIds = ids.Count;
 
             for (int i = 0; i < ids.Count; i += chunkSize)
             {
@@ -389,19 +391,28 @@ namespace ADO_Tools.Services
                     if (id > 0)
                         result[id] = changed;
                 }
+
+                progressCallback?.Invoke(Math.Min(i + chunkSize, totalIds), totalIds);
             }
             return result;
         }
 
-        public async Task<List<WorkItemDto>> FetchWorkItemsByIdsAsync(List<int> ids, Action<int, int>? progressCallback = null)
+        public async Task<List<WorkItemDto>> FetchWorkItemsByIdsAsync(List<int> ids, Action<int, int>? progressCallback = null, Action<string>? statusCallback = null)
         {
             var list = new List<WorkItemDto>();
             var chunkSize = 100;
             var commentsCutoff = new DateTime(2023, 1, 1);
             int totalIds = ids.Count;
 
+            // Start with 128 parallel slots for maximum throughput.
+            // If the API returns 429, concurrency is halved automatically
+            // (128 â†’ 64 â†’ 32 â†’ ...) until the rate limit is respected.
+            int maxSlots = 128;
+            var commentThrottle = new SemaphoreSlim(maxSlots);
+
             for (int i = 0; i < ids.Count; i += chunkSize)
             {
+                // Batch-fetch work item data (fields, relations, attachments) in one call
                 var chunk = ids.Skip(i).Take(chunkSize).ToList();
                 string idsCsv = string.Join(",", chunk);
                 string getUrl = $"{baseUrl}/wit/workitems?ids={idsCsv}&$expand=All&api-version=7.1";
@@ -409,9 +420,13 @@ namespace ADO_Tools.Services
                 r2.EnsureSuccessStatusCode();
                 var j2 = JObject.Parse(await r2.Content.ReadAsStringAsync());
 
+                var dtos = new List<WorkItemDto>();
+                var commentTasks = new List<Task>();
+
                 foreach (var wi in j2["value"] ?? Enumerable.Empty<JToken>())
                 {
                     var dto = ParseWorkItem(wi);
+                    dtos.Add(dto);
 
                     // Fetch discussion comments for recent items.
                     // System.History only returns the latest revision, so we rely on
@@ -419,13 +434,39 @@ namespace ADO_Tools.Services
                     int commentCount = wi["fields"]?["System.CommentCount"]?.Value<int>() ?? 0;
                     if (commentCount > 0 && dto.CreatedDate >= commentsCutoff)
                     {
-                        var comments = await GetWorkItemCommentsAsync(dto.Id);
-                        if (comments.Count > 0)
-                            dto.Fields["_CommentsCombined"] = string.Join("\n", comments);
-                    }
+                        // Capture the reference so each task works on the correct dto
+                        var capturedDto = dto;
 
-                    list.Add(dto);
+                        // Queue a task that will run concurrently with other comment fetches.
+                        // WaitAsync() blocks until one of the available slots opens up.
+                        // Release() frees the slot when done, letting the next queued task proceed.
+                        commentTasks.Add(Task.Run(async () =>
+                        {
+                            await commentThrottle.WaitAsync();
+                            try
+                            {
+                                var comments = await GetWorkItemCommentsAsync(capturedDto.Id, commentThrottle);
+                                if (comments.Count > 0)
+                                    capturedDto.Fields["_CommentsCombined"] = string.Join("\n", comments);
+                            }
+                            finally
+                            {
+                                commentThrottle.Release();
+                            }
+                        }));
+                    }
                 }
+
+                // Report parallelism and comment count for this chunk
+                if (commentTasks.Count > 0)
+                {
+                    int effectiveSlots = commentThrottle.CurrentCount + commentTasks.Count;
+                    statusCallback?.Invoke($"Fetching comments for {commentTasks.Count} items ({effectiveSlots} parallel)");
+                }
+
+                // Wait for all comment fetches in this chunk to finish before moving on
+                await Task.WhenAll(commentTasks);
+                list.AddRange(dtos);
 
                 progressCallback?.Invoke(Math.Min(i + chunkSize, totalIds), totalIds);
             }
@@ -434,7 +475,7 @@ namespace ADO_Tools.Services
 
         private static WorkItemDto ParseWorkItem(JToken wi)
         {
-            // §1. Core typed properties
+            // Â§1. Core typed properties
             // These are stored as typed properties on WorkItemDto and persisted
             // into EmbeddingCacheEntry / QueryCacheEntry for backlog & query search.
             // They provide the minimal metadata needed for display and caching.
@@ -456,13 +497,13 @@ namespace ADO_Tools.Services
                 HtmlUrl = wi["_links"]?["html"]?["href"]?.ToString() ?? ""
             };
 
-            // §2. ChangedDate for incremental cache updates
+            // Â§2. ChangedDate for incremental cache updates
             // Used by EmbeddingCache and QuerySearchCache to detect whether
             // a work item has been modified since the last cache build.
             dto.Fields["System.ChangedDate"] = wi["fields"]?["System.ChangedDate"]?.ToString() ?? "";
 
-            // §3. All fields from the API response
-            // The ADO API only returns fields that have a value — empty/null fields
+            // Â§3. All fields from the API response
+            // The ADO API only returns fields that have a value â€” empty/null fields
             // are simply absent from the JSON, which is by-design API behavior.
             // We capture everything returned here. BuildSearchableText() selects
             // the relevant rich-text fields using suffix matching (so prefix
@@ -476,7 +517,7 @@ namespace ADO_Tools.Services
 
                     var token = prop.Value;
 
-                    // Person/identity fields are JSON objects — extract displayName
+                    // Person/identity fields are JSON objects â€” extract displayName
                     if (token.Type == JTokenType.Object)
                     {
                         var displayName = token["displayName"]?.ToString();
@@ -531,16 +572,42 @@ namespace ADO_Tools.Services
             return filePath;
         }
 
-        public async Task<List<string>> GetWorkItemCommentsAsync(int workItemId)
+        public async Task<List<string>> GetWorkItemCommentsAsync(int workItemId, SemaphoreSlim? throttle = null)
         {
             var comments = new List<string>();
             string url = $"{baseUrl}/wit/workItems/{workItemId}/comments?api-version=7.1-preview.4";
             var resp = await _http.GetAsync(url);
+
+            // If rate-limited, halve the concurrency and retry after the suggested delay.
+            // Halving converges quickly: 128 â†’ 64 â†’ 32 â†’ 16 â†’ 8 (only 4 reductions to reach 8).
+            if (resp.StatusCode == (System.Net.HttpStatusCode)429)
+            {
+                if (throttle != null)
+                {
+                    // Permanently consume half of the remaining slots to halve concurrency
+                    int slotsToRemove = Math.Max(throttle.CurrentCount / 2, 1);
+                    for (int s = 0; s < slotsToRemove; s++)
+                        await throttle.WaitAsync();
+                }
+
+                // Respect Retry-After header, or default to 2 seconds
+                var retryAfter = resp.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(2);
+                await Task.Delay(retryAfter);
+
+                resp = await _http.GetAsync(url);
+            }
+
             if (!resp.IsSuccessStatusCode) return comments;
 
             var json = JObject.Parse(await resp.Content.ReadAsStringAsync());
             foreach (var comment in json["comments"] ?? Enumerable.Empty<JToken>())
             {
+                // Skip automated migration comments â€” they contain boilerplate text
+                // repeated across all migrated items and pollute search/rich text.
+                var author = comment["createdBy"]?["displayName"]?.ToString() ?? "";
+                if (author.Equals("Migration", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
                 var text = comment["text"]?.ToString();
                 if (!string.IsNullOrWhiteSpace(text))
                     comments.Add(text);

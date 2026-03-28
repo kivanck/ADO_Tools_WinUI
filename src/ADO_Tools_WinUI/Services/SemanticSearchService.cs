@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using ADO_Tools.Models;
 using ADO_Tools.Services;
+using Newtonsoft.Json.Linq;
 
 namespace ADO_Tools_WinUI.Services
 {
@@ -271,6 +272,10 @@ namespace ADO_Tools_WinUI.Services
                 progressCallback: (fetched, total) =>
                 {
                     StatusUpdated?.Invoke($"Fetching work items… {fetched}/{total}");
+                },
+                statusCallback: (status) =>
+                {
+                    StatusUpdated?.Invoke(status);
                 });
 
             var allItems = queryResult.WorkItems;

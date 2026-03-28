@@ -218,9 +218,12 @@ namespace ADO_Tools_WinUI.Pages
             }
         }
 
+        private QueryDto? _restoredQuery;
+
         private void PopulateQueryTree()
         {
             treeQueries.RootNodes.Clear();
+            _restoredQuery = null;
             foreach (var root in _queryTree)
             {
                 var node = BuildTreeNode(root);
@@ -239,6 +242,7 @@ namespace ADO_Tools_WinUI.Pages
                 {
                     SelectNodeByQuery(treeQueries.RootNodes, match);
                     CollapseQueryTree(match);
+                    _restoredQuery = match;
                 }
             }
         }
@@ -286,7 +290,7 @@ namespace ADO_Tools_WinUI.Pages
             CollapseQueryTree(q);
         }
 
-        private void LblSelectedQuery_DoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
+        private void LblSelectedQuery_Tapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
         {
             // Expand tree again for query selection
             lblSelectedQuery.Visibility = Visibility.Collapsed;
@@ -585,10 +589,12 @@ namespace ADO_Tools_WinUI.Pages
         {
             if (_tfsRest == null || _queryListFlat.Count == 0) return;
 
-            // SelectedItem may be a TreeViewNode (when using RootNodes) or the Content directly
+            // SelectedItem may be a TreeViewNode (when using RootNodes) or the Content directly.
+            // Fall back to the restored query when the tree is collapsed with no active selection.
             var selected = treeQueries.SelectedItem;
             var q = selected as QueryDto
-                ?? (selected as TreeViewNode)?.Content as QueryDto;
+                ?? (selected as TreeViewNode)?.Content as QueryDto
+                ?? _restoredQuery;
             if (q == null || q.IsFolder) return;
 
             string wiql = q.Wiql ?? "";
@@ -618,8 +624,21 @@ namespace ADO_Tools_WinUI.Pages
                     _querySearchCache = new QuerySearchCache(q.Id, cacheDir);
                     _querySearchCache.TryLoad();
 
-                    lblItemCount.Text = $"Checking {allIds.Count} items…";
-                    var freshChangedDates = await _tfsRest.FetchWorkItemChangedDatesAsync(allIds);
+                    // Switch to determinate progress for the checking phase
+                    progressBar.IsIndeterminate = false;
+                    progressBar.Minimum = 0;
+                    progressBar.Maximum = allIds.Count;
+                    progressBar.Value = 0;
+
+                    lblItemCount.Text = $"Checking 0/{allIds.Count} items…";
+                    var freshChangedDates = await _tfsRest.FetchWorkItemChangedDatesAsync(allIds, (fetched, total) =>
+                    {
+                        DispatcherQueue.TryEnqueue(() =>
+                        {
+                            progressBar.Value = fetched;
+                            lblItemCount.Text = $"Checking {fetched}/{total} items…";
+                        });
+                    });
 
                     // Step 3: Determine which items need a full re-fetch
                     var idsToFetch = _querySearchCache.GetIdsNeedingFetch(allIds, freshChangedDates);
@@ -627,10 +646,31 @@ namespace ADO_Tools_WinUI.Pages
                     // Step 4: Fetch only new/changed items
                     if (idsToFetch.Count > 0)
                     {
-                        lblItemCount.Text = $"Fetching {idsToFetch.Count} of {allIds.Count} items…";
-                        var freshItems = await _tfsRest.FetchWorkItemsByIdsAsync(idsToFetch);
+                        progressBar.Maximum = idsToFetch.Count;
+                        progressBar.Value = 0;
+
+                        lblItemCount.Text = $"Fetching 0/{idsToFetch.Count} items…";
+                        var freshItems = await _tfsRest.FetchWorkItemsByIdsAsync(idsToFetch,
+                            (fetched, total) =>
+                            {
+                                DispatcherQueue.TryEnqueue(() =>
+                                {
+                                    progressBar.Value = fetched;
+                                    lblItemCount.Text = $"Fetching {fetched}/{total} items…";
+                                });
+                            },
+                            (status) =>
+                            {
+                                DispatcherQueue.TryEnqueue(() =>
+                                {
+                                    lblConnectionStatus.Text = status;
+                                });
+                            });
                         _querySearchCache.MergeFullItems(freshItems);
                         await _querySearchCache.SaveAsync();
+
+                        // Clear the status after fetching completes
+                        lblConnectionStatus.Text = "Connected";
                     }
 
                     // Step 5: Reconstruct the full work item list from cache (in query order)

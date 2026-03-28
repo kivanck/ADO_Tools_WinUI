@@ -111,10 +111,10 @@
                                 <TextBlock
                                     x:Name="lblSelectedQuery"
                                     Padding="8,6"
-                                    DoubleTapped="LblSelectedQuery_DoubleTapped"
+                                    Tapped="LblSelectedQuery_Tapped"
                                     Style="{StaticResource BodyStrongTextBlockStyle}"
                                     Visibility="Collapsed"
-                                    ToolTipService.ToolTip="Double-click to change query" />
+                                    ToolTipService.ToolTip="Click to change query" />
                                 <TreeView
                                     x:Name="treeQueries"
                                     MaxHeight="200"
