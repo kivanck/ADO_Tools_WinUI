@@ -648,6 +648,7 @@ namespace ADO_Tools_WinUI.Pages
                     {
                         progressBar.Maximum = idsToFetch.Count;
                         progressBar.Value = 0;
+                        string parallelInfo = "";
 
                         lblItemCount.Text = $"Fetching 0/{idsToFetch.Count} items…";
                         var freshItems = await _tfsRest.FetchWorkItemsByIdsAsync(idsToFetch,
@@ -656,21 +657,15 @@ namespace ADO_Tools_WinUI.Pages
                                 DispatcherQueue.TryEnqueue(() =>
                                 {
                                     progressBar.Value = fetched;
-                                    lblItemCount.Text = $"Fetching {fetched}/{total} items…";
+                                    lblItemCount.Text = $"Fetching {fetched}/{total} items… {parallelInfo}";
                                 });
                             },
                             (status) =>
                             {
-                                DispatcherQueue.TryEnqueue(() =>
-                                {
-                                    lblConnectionStatus.Text = status;
-                                });
+                                parallelInfo = status;
                             });
                         _querySearchCache.MergeFullItems(freshItems);
                         await _querySearchCache.SaveAsync();
-
-                        // Clear the status after fetching completes
-                        lblConnectionStatus.Text = "Connected";
                     }
 
                     // Step 5: Reconstruct the full work item list from cache (in query order)

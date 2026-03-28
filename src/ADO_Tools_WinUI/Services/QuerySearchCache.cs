@@ -159,10 +159,15 @@ namespace ADO_Tools_WinUI.Services
                 string changedDate = wi.Fields.TryGetValue("System.ChangedDate", out var cd)
                     ? cd?.ToString() ?? "" : "";
 
-                // Serialize Fields dict (values are object, convert to string for cache)
+                // Serialize Fields dict — strip HTML from rich-text fields to reduce cache size
                 var fieldStrings = new Dictionary<string, string>();
                 foreach (var kvp in wi.Fields)
-                    fieldStrings[kvp.Key] = kvp.Value?.ToString() ?? "";
+                {
+                    string value = kvp.Value?.ToString() ?? "";
+                    if (HtmlFieldSuffixes.Contains(GetFieldSuffix(kvp.Key)))
+                        value = SemanticSearchService.StripHtml(value);
+                    fieldStrings[kvp.Key] = value;
+                }
 
                 var attachments = wi.Attachments.Select(a => new CachedAttachment
                 {
@@ -272,6 +277,25 @@ namespace ADO_Tools_WinUI.Services
                 SearchableText = e.SearchableText,
                 Fields = e.Fields
             }).ToList();
+        }
+
+        /// <summary>
+        /// Rich-text field suffixes that contain HTML markup.
+        /// These are stripped to plain text when cached to reduce file size.
+        /// </summary>
+        private static readonly HashSet<string> HtmlFieldSuffixes = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "Description", "ReproSteps", "SystemInfo", "AcceptanceCriteria",
+            "FixDetails", "InvestigationNotes", "TestingNotes", "Notes",
+            "History", "_CommentsCombined"
+        };
+
+        private static string GetFieldSuffix(string fieldName)
+        {
+            int lastDot = fieldName.LastIndexOf('.');
+            return lastDot >= 0 && lastDot < fieldName.Length - 1
+                ? fieldName[(lastDot + 1)..]
+                : fieldName;
         }
 
         private static string SanitizeFileName(string input)
