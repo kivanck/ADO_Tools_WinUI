@@ -34,6 +34,7 @@ namespace ADO_Tools_WinUI.Pages
         private string _lastSearchQuery = "";
         private string _lastCompareSource = "";
         private List<string> _queryColumns = [];
+        private bool _initialized;
 
         // Friendly display names for ADO field reference names
         private static readonly Dictionary<string, string> FieldDisplayNames = new(StringComparer.OrdinalIgnoreCase)
@@ -73,15 +74,18 @@ namespace ADO_Tools_WinUI.Pages
 
         private async void WorkItemsPage_Loaded(object sender, RoutedEventArgs e)
         {
+            if (_initialized) return;
+            _initialized = true;
+
             var s = AppSettings.Default;
             txtProjectName.Text = string.IsNullOrWhiteSpace(s.WorkItemProject) ? s.Project : s.WorkItemProject;
             dataGridWorkItems.ItemsSource = _rows;
 
-            TryLoadExistingCache();
+            await TryLoadExistingCacheAsync();
             await TryAutoConnectAsync();
         }
 
-        private void TryLoadExistingCache()
+        private async Task TryLoadExistingCacheAsync()
         {
             var settings = AppSettings.Default;
             string project = string.IsNullOrWhiteSpace(settings.WorkItemProject) ? settings.Project : settings.WorkItemProject;
@@ -92,33 +96,49 @@ namespace ADO_Tools_WinUI.Pages
             if (!File.Exists(Path.Combine(modelDir, "model.onnx")))
                 return;
 
+            lblCacheStatus.Text = "Loading search index…";
+
             try
             {
                 string cacheDir = Path.Combine(AppContext.BaseDirectory, "EmbeddingCache");
-                var search = new SemanticSearchService(modelDir, cacheDir);
                 string areaPath = settings.SearchAreaPath?.Trim() ?? "";
+                string org = settings.Organization;
 
-                if (search.TryLoadCache(settings.Organization, project, areaPath))
+                // Heavy work: ONNX model load, JSON deserialization, BM25 index build
+                var result = await Task.Run(() =>
+                {
+                    var search = new SemanticSearchService(modelDir, cacheDir);
+                    if (search.TryLoadCache(org, project, areaPath))
+                    {
+                        var bm25 = new Bm25SearchService();
+                        bm25.BuildIndex(search.GetCacheEntries(false));
+                        return (Search: search, Bm25: bm25, Loaded: true);
+                    }
+                    else
+                    {
+                        search.Dispose();
+                        return (Search: (SemanticSearchService?)null, Bm25: (Bm25SearchService?)null, Loaded: false);
+                    }
+                });
+
+                if (result.Loaded)
                 {
                     _semanticSearch?.Dispose();
-                    _semanticSearch = search;
-
-                    _bm25BacklogSearch = new Bm25SearchService();
-                    _bm25BacklogSearch.BuildIndex(_semanticSearch.GetCacheEntries(false));
+                    _semanticSearch = result.Search;
+                    _bm25BacklogSearch = result.Bm25;
 
                     txtSemanticSearch.IsEnabled = true;
                     btnFindSimilar.IsEnabled = true;
-                    lblCacheStatus.Text = FormatCacheLabel($"{_semanticSearch.CachedItemCount} items in cache");
+                    lblCacheStatus.Text = FormatCacheLabel($"{_semanticSearch!.CachedItemCount} items in cache");
                 }
                 else
                 {
-                    search.Dispose();
                     lblCacheStatus.Text = "No cache found. Go to Settings to build the search index.";
                 }
             }
             catch
             {
-                // Silently fail — user can still build index in Settings
+                lblCacheStatus.Text = "Failed to load search index.";
             }
         }
 
@@ -149,10 +169,10 @@ namespace ADO_Tools_WinUI.Pages
                 btnUpdateIndex.IsEnabled = true;
                 lblConnectionStatus.Text = "Connected";
             }
-            catch
+            catch (Exception ex)
             {
                 _tfsRest = null;
-                lblConnectionStatus.Text = "Auto-connect failed \u2014 click Connect or check Settings.";
+                lblConnectionStatus.Text = $"Auto-connect failed: {ex.Message}";
             }
         }
 
@@ -728,50 +748,69 @@ namespace ADO_Tools_WinUI.Pages
             progressBar.Visibility = Visibility.Visible;
             btnDownloadSelected.IsEnabled = false;
 
-            foreach (var row in selected)
+            int failedAttachments = 0;
+
+            try
             {
-                var workItem = _workItemList.FirstOrDefault(w => w.Id == row.Id);
-
-                // If item came from search (not in _workItemList), fetch it from the API
-                if (workItem == null)
+                foreach (var row in selected)
                 {
-                    try
+                    var workItem = _workItemList.FirstOrDefault(w => w.Id == row.Id);
+
+                    // If item came from search (not in _workItemList), fetch it from the API
+                    if (workItem == null)
                     {
-                        workItem = await _tfsRest.GetWorkItemAsync(row.Id);
+                        try
+                        {
+                            workItem = await _tfsRest.GetWorkItemAsync(row.Id);
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Failed to fetch work item #{row.Id}: {ex.Message}");
+                        }
                     }
-                    catch (Exception ex)
+
+                    if (workItem == null) continue;
+
+                    string sizeText = CalculateAttachmentSize(workItem);
+                    lblDownloading.Text = $"Downloading #{workItem.Id}";
+                    lblSize.Text = $"{workItem.Attachments.Count} Attachment(s): {sizeText}";
+
+                    string path = CreateFolder(ReadTopFolder(), workItem.Id.ToString()) + Path.DirectorySeparatorChar;
+
+                    string htmlPath = Path.Combine(path, RemoveIllegalCharacters(workItem.Title ?? "") + ".html");
+                    string url = workItem.HtmlUrl ?? "";
+                    File.WriteAllText(htmlPath,
+                        $"<h1><a href=\"{System.Net.WebUtility.HtmlEncode(url)}\">{System.Net.WebUtility.HtmlEncode(workItem.Title ?? "")}</a></h1>");
+
+                    foreach (var att in workItem.Attachments)
                     {
-                        System.Diagnostics.Debug.WriteLine($"Failed to fetch work item #{row.Id}: {ex.Message}");
+                        try { await _tfsRest.DownloadAttachmentAsync(att, path); }
+                        catch (Exception ex)
+                        {
+                            failedAttachments++;
+                            System.Diagnostics.Debug.WriteLine($"Attachment download failed: {ex.Message}");
+                        }
                     }
+
+                    row.Downloaded = true;
                 }
 
-                if (workItem == null) continue;
-
-                string sizeText = CalculateAttachmentSize(workItem);
-                lblDownloading.Text = $"Downloading #{workItem.Id}";
-                lblSize.Text = $"{workItem.Attachments.Count} Attachment(s): {sizeText}";
-
-                string path = CreateFolder(ReadTopFolder(), workItem.Id.ToString()) + Path.DirectorySeparatorChar;
-
-                string htmlPath = Path.Combine(path, RemoveIllegalCharacters(workItem.Title ?? "") + ".html");
-                string url = workItem.HtmlUrl ?? "";
-                File.WriteAllText(htmlPath,
-                    $"<h1><a href=\"{System.Net.WebUtility.HtmlEncode(url)}\">{System.Net.WebUtility.HtmlEncode(workItem.Title ?? "")}</a></h1>");
-
-                foreach (var att in workItem.Attachments)
-                {
-                    try { await _tfsRest.DownloadAttachmentAsync(att, path); }
-                    catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Attachment download failed: {ex.Message}"); }
-                }
-
-                row.Downloaded = true;
+                lblDownloading.Text = failedAttachments > 0
+                    ? $"Download Complete ({failedAttachments} attachment(s) failed)"
+                    : "Download Complete";
+                lblSize.Text = "";
             }
-
-            lblDownloading.Text = "Download Complete";
-            lblSize.Text = "";
-            progressBar.IsIndeterminate = false;
-            progressBar.Visibility = Visibility.Collapsed;
-            btnDownloadSelected.IsEnabled = true;
+            catch (Exception ex)
+            {
+                lblDownloading.Text = $"Download failed: {ex.Message}";
+                lblSize.Text = "";
+            }
+            finally
+            {
+                progressBar.IsIndeterminate = false;
+                progressBar.Visibility = Visibility.Collapsed;
+                btnDownloadSelected.IsEnabled = true;
+            }
         }
 
         private async void BtnDownloadSingle_Click(object sender, RoutedEventArgs e)
@@ -783,47 +822,61 @@ namespace ADO_Tools_WinUI.Pages
             progressBar.IsIndeterminate = true;
             progressBar.Visibility = Visibility.Visible;
 
-            WorkItemDto? workItem;
             try
             {
-                workItem = await _tfsRest.GetWorkItemAsync(elementId);
+                WorkItemDto? workItem;
+                try
+                {
+                    workItem = await _tfsRest.GetWorkItemAsync(elementId);
+                }
+                catch (Exception ex)
+                {
+                    ShowMessage("Failed to fetch work item: " + ex.Message, "Error");
+                    return;
+                }
+
+                if (workItem == null)
+                {
+                    ShowMessage($"Work item #{elementId} not found.");
+                    return;
+                }
+
+                string sizeText = CalculateAttachmentSize(workItem);
+                lblDownloading.Text = $"Downloading #{workItem.Id}";
+                lblSize.Text = $"{workItem.Attachments.Count} Attachment(s): {sizeText}";
+
+                string path = CreateFolder(ReadTopFolder(), workItem.Id.ToString()) + Path.DirectorySeparatorChar;
+                string htmlPath = Path.Combine(path, RemoveIllegalCharacters(workItem.Title ?? "") + ".html");
+                string url = workItem.HtmlUrl ?? "";
+                File.WriteAllText(htmlPath,
+                    $"<h1><a href=\"{System.Net.WebUtility.HtmlEncode(url)}\">{System.Net.WebUtility.HtmlEncode(workItem.Title ?? "")}</a></h1>");
+
+                int failedAttachments = 0;
+                foreach (var att in workItem.Attachments)
+                {
+                    try { await _tfsRest.DownloadAttachmentAsync(att, path); }
+                    catch (Exception ex)
+                    {
+                        failedAttachments++;
+                        System.Diagnostics.Debug.WriteLine($"Attachment download failed: {ex.Message}");
+                    }
+                }
+
+                lblDownloading.Text = failedAttachments > 0
+                    ? $"Download Complete ({failedAttachments} attachment(s) failed)"
+                    : "Download Complete";
+                lblSize.Text = "";
             }
             catch (Exception ex)
             {
-                ShowMessage("Failed to fetch work item: " + ex.Message, "Error");
+                lblDownloading.Text = $"Download failed: {ex.Message}";
+                lblSize.Text = "";
+            }
+            finally
+            {
                 progressBar.IsIndeterminate = false;
                 progressBar.Visibility = Visibility.Collapsed;
-                return;
             }
-
-            if (workItem == null)
-            {
-                ShowMessage($"Work item #{elementId} not found.");
-                progressBar.IsIndeterminate = false;
-                progressBar.Visibility = Visibility.Collapsed;
-                return;
-            }
-
-            string sizeText = CalculateAttachmentSize(workItem);
-            lblDownloading.Text = $"Downloading #{workItem.Id}";
-            lblSize.Text = $"{workItem.Attachments.Count} Attachment(s): {sizeText}";
-
-            string path = CreateFolder(ReadTopFolder(), workItem.Id.ToString()) + Path.DirectorySeparatorChar;
-            string htmlPath = Path.Combine(path, RemoveIllegalCharacters(workItem.Title ?? "") + ".html");
-            string url = workItem.HtmlUrl ?? "";
-            File.WriteAllText(htmlPath,
-                $"<h1><a href=\"{System.Net.WebUtility.HtmlEncode(url)}\">{System.Net.WebUtility.HtmlEncode(workItem.Title ?? "")}</a></h1>");
-
-            foreach (var att in workItem.Attachments)
-            {
-                try { await _tfsRest.DownloadAttachmentAsync(att, path); }
-                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Attachment download failed: {ex.Message}"); }
-            }
-
-            lblDownloading.Text = "Download Complete";
-            lblSize.Text = "";
-            progressBar.IsIndeterminate = false;
-            progressBar.Visibility = Visibility.Collapsed;
         }
 
         private void DataGridWorkItems_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -1022,9 +1075,9 @@ namespace ADO_Tools_WinUI.Pages
         /// <summary>
         /// Reloads the search cache from disk. Called after Settings page rebuilds the index.
         /// </summary>
-        public void ReloadSearchCache()
+        public async void ReloadSearchCache()
         {
-            TryLoadExistingCache();
+            await TryLoadExistingCacheAsync();
         }
 
 
@@ -1167,37 +1220,47 @@ namespace ADO_Tools_WinUI.Pages
             string query = txtSemanticSearch.Text?.Trim() ?? "";
             if (string.IsNullOrEmpty(query))
             {
-                BtnClearSearch_Click(null!, null!);
+                ClearBacklogSearch();
                 return;
             }
 
             ShowProgress();
 
-            bool excludeDone = chkExcludeDone.IsChecked == true;
-            int topN = (int)numTopResults.Value;
-            // Fetch more candidates from each engine so RRF has enough overlap
-            int fetchN = topN * 2;
+            try
+            {
+                bool excludeDone = chkExcludeDone.IsChecked == true;
+                int topN = (int)numTopResults.Value;
+                // Fetch more candidates from each engine so RRF has enough overlap
+                int fetchN = topN * 2;
 
-            var semanticTask = Task.Run(() =>
-                _semanticSearch.Search(query, fetchN, excludeDone));
-            var bm25Task = Task.Run(() =>
-                _bm25BacklogSearch.Search(query, fetchN, excludeDone));
+                var semanticTask = Task.Run(() =>
+                    _semanticSearch.Search(query, fetchN, excludeDone));
+                var bm25Task = Task.Run(() =>
+                    _bm25BacklogSearch.Search(query, fetchN, excludeDone));
 
-            await Task.WhenAll(semanticTask, bm25Task);
+                await Task.WhenAll(semanticTask, bm25Task);
 
-            var merged = MergeByReciprocalRankFusion(semanticTask.Result, bm25Task.Result, topN);
+                var merged = MergeByReciprocalRankFusion(semanticTask.Result, bm25Task.Result, topN);
 
-            ApplyDynamicColumns([]);
+                ApplyDynamicColumns([]);
 
-            _rows.Clear();
-            foreach (var (entry, score) in merged)
-                _rows.Add(BuildRowFromCacheEntry(entry, $"[{score:P0}]"));
+                _rows.Clear();
+                foreach (var (entry, score) in merged)
+                    _rows.Add(BuildRowFromCacheEntry(entry, $"[{score:P0}]"));
 
-            _listMode = ListMode.SearchBacklog;
-            _lastSearchQuery = query;
-            lblItemCount.Text = $"{merged.Count} matches (hybrid)";
-            UpdateContextBadge();
-            HideProgress();
+                _listMode = ListMode.SearchBacklog;
+                _lastSearchQuery = query;
+                lblItemCount.Text = $"{merged.Count} matches (hybrid)";
+                UpdateContextBadge();
+            }
+            catch (Exception ex)
+            {
+                ShowMessage("Search failed: " + ex.Message, "Error");
+            }
+            finally
+            {
+                HideProgress();
+            }
         }
 
         private async Task RunSemanticSearchAsync()
@@ -1207,30 +1270,40 @@ namespace ADO_Tools_WinUI.Pages
             string query = txtSemanticSearch.Text?.Trim() ?? "";
             if (string.IsNullOrEmpty(query))
             {
-                BtnClearSearch_Click(null!, null!);
+                ClearBacklogSearch();
                 return;
             }
 
             ShowProgress();
 
-            bool excludeDone = chkExcludeDone.IsChecked == true;
-            int topN = (int)numTopResults.Value;
+            try
+            {
+                bool excludeDone = chkExcludeDone.IsChecked == true;
+                int topN = (int)numTopResults.Value;
 
-            var results = await Task.Run(() =>
-                _semanticSearch.Search(query, topN, excludeDone));
+                var results = await Task.Run(() =>
+                    _semanticSearch.Search(query, topN, excludeDone));
 
-            // Reset to default columns for backlog search
-            ApplyDynamicColumns([]);
+                // Reset to default columns for backlog search
+                ApplyDynamicColumns([]);
 
-            _rows.Clear();
-            foreach (var r in results)
-                _rows.Add(BuildRowFromCacheEntry(r.CacheEntry, $"[{r.Score:P0}]"));
+                _rows.Clear();
+                foreach (var r in results)
+                    _rows.Add(BuildRowFromCacheEntry(r.CacheEntry, $"[{r.Score:P0}]"));
 
-            _listMode = ListMode.SearchBacklog;
-            _lastSearchQuery = query;
-            lblItemCount.Text = $"{results.Count} matches";
-            UpdateContextBadge();
-            HideProgress();
+                _listMode = ListMode.SearchBacklog;
+                _lastSearchQuery = query;
+                lblItemCount.Text = $"{results.Count} matches";
+                UpdateContextBadge();
+            }
+            catch (Exception ex)
+            {
+                ShowMessage("Search failed: " + ex.Message, "Error");
+            }
+            finally
+            {
+                HideProgress();
+            }
         }
 
         private async Task RunBm25BacklogSearchAsync()
@@ -1240,33 +1313,48 @@ namespace ADO_Tools_WinUI.Pages
             string query = txtSemanticSearch.Text?.Trim() ?? "";
             if (string.IsNullOrEmpty(query))
             {
-                BtnClearSearch_Click(null!, null!);
+                ClearBacklogSearch();
                 return;
             }
 
             ShowProgress();
 
-            bool excludeDone = chkExcludeDone.IsChecked == true;
-            int topN = (int)numTopResults.Value;
+            try
+            {
+                bool excludeDone = chkExcludeDone.IsChecked == true;
+                int topN = (int)numTopResults.Value;
 
-            var results = await Task.Run(() =>
-                _bm25BacklogSearch.Search(query, topN, excludeDone));
+                var results = await Task.Run(() =>
+                    _bm25BacklogSearch.Search(query, topN, excludeDone));
 
-            // Reset to default columns for backlog search
-            ApplyDynamicColumns([]);
+                // Reset to default columns for backlog search
+                ApplyDynamicColumns([]);
 
-            _rows.Clear();
-            foreach (var r in results)
-                _rows.Add(BuildRowFromCacheEntry(r.CacheEntry, $"[{r.Score:F1}]"));
+                _rows.Clear();
+                foreach (var r in results)
+                    _rows.Add(BuildRowFromCacheEntry(r.CacheEntry, $"[{r.Score:F1}]"));
 
-            _listMode = ListMode.SearchBacklog;
-            _lastSearchQuery = query;
-            lblItemCount.Text = $"{results.Count} matches (BM25)";
-            UpdateContextBadge();
-            HideProgress();
+                _listMode = ListMode.SearchBacklog;
+                _lastSearchQuery = query;
+                lblItemCount.Text = $"{results.Count} matches (BM25)";
+                UpdateContextBadge();
+            }
+            catch (Exception ex)
+            {
+                ShowMessage("Search failed: " + ex.Message, "Error");
+            }
+            finally
+            {
+                HideProgress();
+            }
         }
 
         private void BtnClearSearch_Click(object sender, RoutedEventArgs e)
+        {
+            ClearBacklogSearch();
+        }
+
+        private void ClearBacklogSearch()
         {
             txtSemanticSearch.Text = "";
 
@@ -1295,31 +1383,46 @@ namespace ADO_Tools_WinUI.Pages
             string query = txtQuerySearch.Text?.Trim() ?? "";
             if (string.IsNullOrEmpty(query))
             {
-                BtnClearQuerySearch_Click(null!, null!);
+                ClearQuerySearch();
                 return;
             }
 
             ShowProgress();
 
-            var results = await Task.Run(() =>
-                _bm25QuerySearch.Search(query, _bm25QuerySearch.DocumentCount));
+            try
+            {
+                var results = await Task.Run(() =>
+                    _bm25QuerySearch.Search(query, _bm25QuerySearch.DocumentCount));
 
-            // Keep query columns for search-within-query results
-            ApplyDynamicColumns(_queryColumns);
+                // Keep query columns for search-within-query results
+                ApplyDynamicColumns(_queryColumns);
 
-            _rows.Clear();
-            foreach (var r in results)
-                _rows.Add(BuildRowFromCacheEntry(r.CacheEntry, $"[{r.Score:F1}]"));
+                _rows.Clear();
+                foreach (var r in results)
+                    _rows.Add(BuildRowFromCacheEntry(r.CacheEntry, $"[{r.Score:F1}]"));
 
-            _listMode = ListMode.SearchQuery;
-            _lastSearchQuery = query;
-            lblItemCount.Text = $"{results.Count}/{_bm25QuerySearch.DocumentCount} matches in query";
-            UpdateContextBadge();
-            HighlightRows();
-            HideProgress();
+                _listMode = ListMode.SearchQuery;
+                _lastSearchQuery = query;
+                lblItemCount.Text = $"{results.Count}/{_bm25QuerySearch.DocumentCount} matches in query";
+                UpdateContextBadge();
+                HighlightRows();
+            }
+            catch (Exception ex)
+            {
+                ShowMessage("Search failed: " + ex.Message, "Error");
+            }
+            finally
+            {
+                HideProgress();
+            }
         }
 
         private void BtnClearQuerySearch_Click(object sender, RoutedEventArgs e)
+        {
+            ClearQuerySearch();
+        }
+
+        private void ClearQuerySearch()
         {
             txtQuerySearch.Text = "";
 
@@ -1352,6 +1455,7 @@ namespace ADO_Tools_WinUI.Pages
         private void HideProgress()
         {
             progressBar.IsIndeterminate = false;
+            progressBar.Value = 0;
             progressBar.Visibility = Visibility.Collapsed;
         }
     }
