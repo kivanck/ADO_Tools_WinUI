@@ -9,7 +9,7 @@ using Newtonsoft.Json.Linq;
 
 namespace ADO_Tools_WinUI.Services
 {
-    public sealed class SemanticSearchService : IDisposable
+    public sealed class SemanticSearchService : IDisposable, IStatusReporter
     {
         private readonly LocalEmbeddingService _embedder;
         private readonly string _cacheDir;

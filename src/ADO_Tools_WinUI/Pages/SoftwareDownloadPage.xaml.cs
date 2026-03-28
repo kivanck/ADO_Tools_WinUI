@@ -289,6 +289,24 @@ namespace ADO_Tools_WinUI.Pages
             await dialog.ShowAsync();
         }
 
+        /// <summary>
+        /// Shows a progress indicator on the button
+        /// </summary>
+        private void ShowProgress()
+        {
+            progressBar.IsIndeterminate = true;
+            progressBar.Visibility = Visibility.Visible;
+        }
+
+        /// <summary>
+        /// Hides the progress indicator on the button
+        /// </summary>
+        private void HideProgress()
+        {
+            progressBar.IsIndeterminate = false;
+            progressBar.Visibility = Visibility.Collapsed;
+        }
+
         // ── Event Handlers ───────────────────────────────────────────────
 
         /// <summary>
@@ -419,8 +437,7 @@ namespace ADO_Tools_WinUI.Pages
             }
 
             btnLoadBuilds.IsEnabled = false;
-            progressBar.IsIndeterminate = true;
-            progressBar.Visibility = Visibility.Visible;
+            ShowProgress();
 
             var client = new TfsRestClient(org, project, pat);
             int top = (int)numBuildCount.Value;
@@ -458,8 +475,7 @@ namespace ADO_Tools_WinUI.Pages
                 AppendLog("No builds found.");
             }
 
-            progressBar.IsIndeterminate = false;
-            progressBar.Visibility = Visibility.Collapsed;
+            HideProgress();
             btnLoadBuilds.IsEnabled = true;
             PersistCurrentSettings();
         }
@@ -502,8 +518,7 @@ namespace ADO_Tools_WinUI.Pages
             btnUpdate.IsEnabled = false;
             btnStopDownload.Visibility = Visibility.Visible;
             btnStopDownload.IsEnabled = true;
-            progressBar.IsIndeterminate = true;
-            progressBar.Visibility = Visibility.Visible;
+            ShowProgress();
 
             var installFunctions = CreateInstallFunctionsWithLogging();
             var downloadService = CreateBuildDownloadService();
@@ -533,8 +548,7 @@ namespace ADO_Tools_WinUI.Pages
                 HideDownloadStatus();
                 btnUpdate.IsEnabled = true;
                 btnStopDownload.Visibility = Visibility.Collapsed;
-                progressBar.IsIndeterminate = false;
-                progressBar.Visibility = Visibility.Collapsed;
+                HideProgress();
                 return;
             }
 
@@ -543,8 +557,7 @@ namespace ADO_Tools_WinUI.Pages
                 AppendLog("Download complete (download-only mode).");
                 btnUpdate.IsEnabled = true;
                 btnStopDownload.Visibility = Visibility.Collapsed;
-                progressBar.IsIndeterminate = false;
-                progressBar.Visibility = Visibility.Collapsed;
+                HideProgress();
                 PersistCurrentSettings();
                 return;
             }
@@ -561,8 +574,7 @@ namespace ADO_Tools_WinUI.Pages
                 ShowMessage("Setup file not found. Update process aborted!");
                 btnUpdate.IsEnabled = true;
                 btnStopDownload.Visibility = Visibility.Collapsed;
-                progressBar.IsIndeterminate = false;
-                progressBar.Visibility = Visibility.Collapsed;
+                HideProgress();
                 return;
             }
 
@@ -588,8 +600,7 @@ namespace ADO_Tools_WinUI.Pages
                     ShowMessage("Uninstallation failed. Update process aborted!");
                     btnUpdate.IsEnabled = true;
                     btnStopDownload.Visibility = Visibility.Collapsed;
-                    progressBar.IsIndeterminate = false;
-                    progressBar.Visibility = Visibility.Collapsed;
+                    HideProgress();
                     return;
                 }
             }
@@ -609,8 +620,7 @@ namespace ADO_Tools_WinUI.Pages
 
             btnUpdate.IsEnabled = true;
             btnStopDownload.Visibility = Visibility.Collapsed;
-            progressBar.IsIndeterminate = false;
-            progressBar.Visibility = Visibility.Collapsed;
+            HideProgress();
             PersistCurrentSettings();
         }
 
@@ -832,7 +842,7 @@ namespace ADO_Tools_WinUI.Pages
         }
 
         /// <summary>
-        /// Callback for <see cref="TFSFunctions.ProgressUpdated"/>.
+        /// Callback for <see cref="BuildDownloadService.ProgressUpdated"/>.
         /// Updates the download progress bar on the UI thread.
         /// Shows the status panel when a download starts, and updates the bar value (0–100%).
         /// </summary>

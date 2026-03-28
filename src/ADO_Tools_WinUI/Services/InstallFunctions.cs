@@ -19,7 +19,7 @@ namespace ADO_Tools.Services
     /// Handles MSI-based installer operations, registry queries for installed software,
     /// ZIP extraction, and clean uninstall with leftover file/folder cleanup.
     /// </summary>
-    public class InstallFunctions
+    public class InstallFunctions : IStatusReporter
     {
         // Timer that periodically checks whether the Windows Installer (msiexec) is still running
         private DispatcherTimer installerCheckTimer;

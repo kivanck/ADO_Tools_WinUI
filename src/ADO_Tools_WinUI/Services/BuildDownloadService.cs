@@ -10,7 +10,7 @@ namespace ADO_Tools.Services
     /// Orchestrates downloading and extracting build artifacts from Azure DevOps.
     /// Raises events for status/progress reporting and exposes callbacks for UI interaction.
     /// </summary>
-    public class BuildDownloadService
+    public class BuildDownloadService : IStatusReporter
     {
         private readonly TfsRestClient _client;
 

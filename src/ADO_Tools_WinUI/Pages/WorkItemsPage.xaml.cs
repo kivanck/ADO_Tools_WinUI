@@ -550,8 +550,7 @@ namespace ADO_Tools_WinUI.Pages
             }
 
             btnConnect.IsEnabled = false;
-            progressBar.IsIndeterminate = true;
-            progressBar.Visibility = Visibility.Visible;
+            ShowProgress();
 
             try
             {
@@ -579,8 +578,7 @@ namespace ADO_Tools_WinUI.Pages
                 lblConnectionStatus.Text = "Connection failed";
             }
 
-            progressBar.IsIndeterminate = false;
-            progressBar.Visibility = Visibility.Collapsed;
+            HideProgress();
             btnConnect.IsEnabled = true;
             PersistSettings();
         }
@@ -601,8 +599,7 @@ namespace ADO_Tools_WinUI.Pages
 
             lblItemCount.Text = "Reading…";
             btnReadItems.IsEnabled = false;
-            progressBar.IsIndeterminate = true;
-            progressBar.Visibility = Visibility.Visible;
+            ShowProgress();
             _rows.Clear();
 
             try
@@ -634,10 +631,10 @@ namespace ADO_Tools_WinUI.Pages
                     var freshChangedDates = await _tfsRest.FetchWorkItemChangedDatesAsync(allIds, (fetched, total) =>
                     {
                         DispatcherQueue.TryEnqueue(() =>
-                        {
-                            progressBar.Value = fetched;
-                            lblItemCount.Text = $"Checking {fetched}/{total} items…";
-                        });
+                                    {
+                                        progressBar.Value = fetched;
+                                        lblItemCount.Text = $"Checking {fetched}/{total} items…";
+                                    });
                     });
 
                     // Step 3: Determine which items need a full re-fetch
@@ -655,10 +652,10 @@ namespace ADO_Tools_WinUI.Pages
                             (fetched, total) =>
                             {
                                 DispatcherQueue.TryEnqueue(() =>
-                                {
-                                    progressBar.Value = fetched;
-                                    lblItemCount.Text = $"Fetching {fetched}/{total} items… {parallelInfo}";
-                                });
+                                            {
+                                                progressBar.Value = fetched;
+                                                lblItemCount.Text = $"Fetching {fetched}/{total} items… {parallelInfo}";
+                                            });
                             },
                             (status) =>
                             {
@@ -715,8 +712,7 @@ namespace ADO_Tools_WinUI.Pages
             }
 
             UpdateContextBadge();
-            progressBar.IsIndeterminate = false;
-            progressBar.Visibility = Visibility.Collapsed;
+            HideProgress();
             btnReadItems.IsEnabled = true;
         }
 
@@ -862,8 +858,7 @@ namespace ADO_Tools_WinUI.Pages
                 return;
             }
 
-            progressBar.IsIndeterminate = true;
-            progressBar.Visibility = Visibility.Visible;
+            ShowProgress();
             btnFindSimilar.IsEnabled = false;
 
             try
@@ -957,8 +952,7 @@ namespace ADO_Tools_WinUI.Pages
             }
             finally
             {
-                progressBar.IsIndeterminate = false;
-                progressBar.Visibility = Visibility.Collapsed;
+                HideProgress();
                 btnFindSimilar.IsEnabled = true;
             }
         }
@@ -1061,8 +1055,7 @@ namespace ADO_Tools_WinUI.Pages
 
             btnUpdateIndex.IsEnabled = false;
             txtSemanticSearch.IsEnabled = false;
-            progressBar.IsIndeterminate = true;
-            progressBar.Visibility = Visibility.Visible;
+            ShowProgress();
 
             try
             {
@@ -1099,8 +1092,7 @@ namespace ADO_Tools_WinUI.Pages
                 lblCacheStatus.Text = $"Update failed: {ex.Message}";
             }
 
-            progressBar.IsIndeterminate = false;
-            progressBar.Visibility = Visibility.Collapsed;
+            HideProgress();
             btnUpdateIndex.IsEnabled = true;
         }
 
@@ -1181,8 +1173,7 @@ namespace ADO_Tools_WinUI.Pages
                 return;
             }
 
-            progressBar.IsIndeterminate = true;
-            progressBar.Visibility = Visibility.Visible;
+            ShowProgress();
 
             bool excludeDone = chkExcludeDone.IsChecked == true;
             int topN = (int)numTopResults.Value;
@@ -1208,8 +1199,7 @@ namespace ADO_Tools_WinUI.Pages
             _lastSearchQuery = query;
             lblItemCount.Text = $"{merged.Count} matches (hybrid)";
             UpdateContextBadge();
-            progressBar.IsIndeterminate = false;
-            progressBar.Visibility = Visibility.Collapsed;
+            HideProgress();
         }
 
         private async Task RunSemanticSearchAsync()
@@ -1223,8 +1213,7 @@ namespace ADO_Tools_WinUI.Pages
                 return;
             }
 
-            progressBar.IsIndeterminate = true;
-            progressBar.Visibility = Visibility.Visible;
+            ShowProgress();
 
             bool excludeDone = chkExcludeDone.IsChecked == true;
             int topN = (int)numTopResults.Value;
@@ -1243,8 +1232,7 @@ namespace ADO_Tools_WinUI.Pages
             _lastSearchQuery = query;
             lblItemCount.Text = $"{results.Count} matches";
             UpdateContextBadge();
-            progressBar.IsIndeterminate = false;
-            progressBar.Visibility = Visibility.Collapsed;
+            HideProgress();
         }
 
         private async Task RunBm25BacklogSearchAsync()
@@ -1258,8 +1246,7 @@ namespace ADO_Tools_WinUI.Pages
                 return;
             }
 
-            progressBar.IsIndeterminate = true;
-            progressBar.Visibility = Visibility.Visible;
+            ShowProgress();
 
             bool excludeDone = chkExcludeDone.IsChecked == true;
             int topN = (int)numTopResults.Value;
@@ -1278,8 +1265,7 @@ namespace ADO_Tools_WinUI.Pages
             _lastSearchQuery = query;
             lblItemCount.Text = $"{results.Count} matches (BM25)";
             UpdateContextBadge();
-            progressBar.IsIndeterminate = false;
-            progressBar.Visibility = Visibility.Collapsed;
+            HideProgress();
         }
 
         private void BtnClearSearch_Click(object sender, RoutedEventArgs e)
@@ -1315,8 +1301,7 @@ namespace ADO_Tools_WinUI.Pages
                 return;
             }
 
-            progressBar.IsIndeterminate = true;
-            progressBar.Visibility = Visibility.Visible;
+            ShowProgress();
 
             var results = await Task.Run(() =>
                 _bm25QuerySearch.Search(query, _bm25QuerySearch.DocumentCount));
@@ -1333,8 +1318,7 @@ namespace ADO_Tools_WinUI.Pages
             lblItemCount.Text = $"{results.Count}/{_bm25QuerySearch.DocumentCount} matches in query";
             UpdateContextBadge();
             HighlightRows();
-            progressBar.IsIndeterminate = false;
-            progressBar.Visibility = Visibility.Collapsed;
+            HideProgress();
         }
 
         private void BtnClearQuerySearch_Click(object sender, RoutedEventArgs e)
@@ -1359,6 +1343,18 @@ namespace ADO_Tools_WinUI.Pages
             return string.IsNullOrEmpty(path)
                 ? message
                 : $"{message} | {path}";
+        }
+
+        private void ShowProgress(bool indeterminate = true)
+        {
+            progressBar.IsIndeterminate = indeterminate;
+            progressBar.Visibility = Visibility.Visible;
+        }
+
+        private void HideProgress()
+        {
+            progressBar.IsIndeterminate = false;
+            progressBar.Visibility = Visibility.Collapsed;
         }
     }
 }
