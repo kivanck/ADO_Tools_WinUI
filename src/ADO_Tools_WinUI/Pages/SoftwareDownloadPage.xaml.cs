@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using ADO_Tools_WinUI.Models;
@@ -429,6 +430,11 @@ namespace ADO_Tools_WinUI.Pages
                 ShowMessage("Authentication failed. Please check your Personal Access Token.", "Authentication Error");
                 _builds = new();
             }
+            catch (Exception ex)
+            {
+                ShowMessage($"Failed to load builds: {ex.Message}", "Error");
+                _builds = new();
+            }
 
             _allBuildViewModels = _builds.Select(BuildInfoViewModel.FromBuildInfo).ToList();
 
@@ -506,98 +512,96 @@ namespace ADO_Tools_WinUI.Pages
             string extractFolder = Path.Combine(buildDownloadFolder, "Extracted");
             Directory.CreateDirectory(extractFolder);
 
-            string project = txtProject.Text.Trim();
-            var settings = AppSettings.Default;
-
             try
             {
                 // Download and extract the build artifacts
-                await downloadService.DownloadAndExtractArtifactsAsync(
+                bool downloadSuccess = await downloadService.DownloadAndExtractArtifactsAsync(
                     selectedBuildInfo.BuildId,
                     buildDownloadFolder, extractFolder,
                     installFunctions,
                     _downloadCts.Token);
+
+                if (!downloadSuccess)
+                {
+                    ShowMessage("Download or extraction failed. Update process aborted!");
+                    return;
+                }
+
+                if (toggleDownloadOnly.IsOn)
+                {
+                    AppendLog("Download complete (download-only mode).");
+                    PersistCurrentSettings();
+                    return;
+                }
+
+                // Locate the setup executable among the extracted files
+                // (must contain both "setup" and the product name in its filename)
+                string productName = selectedBuildInfo.ProductName;
+                string? setupFile = Directory.GetFiles(extractFolder, "*.exe", SearchOption.AllDirectories)
+                    .FirstOrDefault(f => Path.GetFileName(f).ToLower().Contains("setup") &&
+                                          Path.GetFileName(f).ToLower().Contains(productName.ToLower()));
+
+                if (setupFile == null)
+                {
+                    ShowMessage("Setup file not found. Update process aborted!");
+                    return;
+                }
+
+                var bentleySoftware = installFunctions.GetInstalledBentleySoftware().ToList();
+
+                installFunctions.UpdateStatus(
+                    $"Searching for installed version {selectedBuildInfo.MajorVersion}.{selectedBuildInfo.MajorVersionSequence}.* ...");
+
+                // Find a currently installed build whose product name and major version match the selected build
+                var matchingInstalled = bentleySoftware.FirstOrDefault(installed =>
+                    installed.DisplayName.Replace(" ", "").StartsWith(selectedBuildInfo.ProductName, StringComparison.OrdinalIgnoreCase) &&
+                    installed.MajorVersion == selectedBuildInfo.MajorVersion &&
+                    installed.MajorVersionSequence == selectedBuildInfo.MajorVersionSequence);
+
+                //Uninstall exisitng version
+                if (matchingInstalled != null)
+                {
+                    installFunctions.UpdateStatus($"Installed version found {matchingInstalled.DisplayVersion}");
+                    bool cleanUninstall = toggleCleanUninstall.IsOn;
+                    bool uninstallOk = await installFunctions.UninstallSoftwareAsync(matchingInstalled, cleanUninstall);
+                    if (!uninstallOk)
+                    {
+                        ShowMessage("Uninstallation failed. Update process aborted!");
+                        return;
+                    }
+                }
+                else
+                {
+                    installFunctions.UpdateStatus("No matching installed version found. Proceeding with installation.");
+                }
+
+                if (File.Exists(setupFile))
+                {
+                    await installFunctions.InstallSoftwareAsync(setupFile);
+                }
+                else
+                {
+                    installFunctions.UpdateStatus("Setup file not found after extraction.");
+                }
+
+                PersistCurrentSettings();
             }
             catch (OperationCanceledException)
             {
                 AppendLog("Download was cancelled.");
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"Unexpected error: {ex.Message}");
+                ShowMessage($"An error occurred: {ex.Message}", "Error");
+            }
+            finally
+            {
+                btnUpdate.IsEnabled = true;
+                btnStopDownload.Visibility = Visibility.Collapsed;
+                HideProgress();
                 HideDownloadStatus();
-                btnUpdate.IsEnabled = true;
-                btnStopDownload.Visibility = Visibility.Collapsed;
-                HideProgress();
-                return;
             }
-
-            if (toggleDownloadOnly.IsOn)
-            {
-                AppendLog("Download complete (download-only mode).");
-                btnUpdate.IsEnabled = true;
-                btnStopDownload.Visibility = Visibility.Collapsed;
-                HideProgress();
-                PersistCurrentSettings();
-                return;
-            }
-
-            // Locate the setup executable among the extracted files
-            // (must contain both "setup" and the product name in its filename)
-            string productName = selectedBuildInfo.ProductName;
-            string? setupFile = Directory.GetFiles(extractFolder, "*.exe", SearchOption.AllDirectories)
-                .FirstOrDefault(f => Path.GetFileName(f).ToLower().Contains("setup") &&
-                                      Path.GetFileName(f).ToLower().Contains(productName.ToLower()));
-
-            if (setupFile == null)
-            {
-                ShowMessage("Setup file not found. Update process aborted!");
-                btnUpdate.IsEnabled = true;
-                btnStopDownload.Visibility = Visibility.Collapsed;
-                HideProgress();
-                return;
-            }
-
-            var bentleySoftware = installFunctions.GetInstalledBentleySoftware().ToList();
-
-            installFunctions.UpdateStatus(
-                $"Searching for installed version {selectedBuildInfo.MajorVersion}.{selectedBuildInfo.MajorVersionSequence}.* ...");
-
-            // Find a currently installed build whose product name and major version match the selected build
-            var matchingInstalled = bentleySoftware.FirstOrDefault(installed =>
-                installed.DisplayName.Replace(" ", "").StartsWith(selectedBuildInfo.ProductName, StringComparison.OrdinalIgnoreCase) &&
-                installed.MajorVersion == selectedBuildInfo.MajorVersion &&
-                installed.MajorVersionSequence == selectedBuildInfo.MajorVersionSequence);
-
-            //Uninstall exisitng version
-            if (matchingInstalled != null)
-            {
-                installFunctions.UpdateStatus($"Installed version found {matchingInstalled.DisplayVersion}");
-                bool cleanUninstall = toggleCleanUninstall.IsOn;
-                bool uninstallOk = await installFunctions.UninstallSoftwareAsync(matchingInstalled, cleanUninstall);
-                if (!uninstallOk)
-                {
-                    ShowMessage("Uninstallation failed. Update process aborted!");
-                    btnUpdate.IsEnabled = true;
-                    btnStopDownload.Visibility = Visibility.Collapsed;
-                    HideProgress();
-                    return;
-                }
-            }
-            else
-            {
-                installFunctions.UpdateStatus("No matching installed version found. Proceeding with installation.");
-            }
-
-            if (File.Exists(setupFile))
-            {
-                await installFunctions.InstallSoftwareAsync(setupFile);
-            }
-            else
-            {
-                installFunctions.UpdateStatus("Setup file not found after extraction.");
-            }
-
-            btnUpdate.IsEnabled = true;
-            btnStopDownload.Visibility = Visibility.Collapsed;
-            HideProgress();
-            PersistCurrentSettings();
         }
 
         /// <summary>Cancels the current download operation.</summary>
@@ -721,6 +725,9 @@ namespace ADO_Tools_WinUI.Pages
                 uninstallBtn.IsEnabled = listView.SelectedItem != null;
             };
 
+            // Hoisted so the timer can be stopped when the dialog closes
+            InstallFunctions? dialogInstallFunctions = null;
+
             // Uninstall handler
             uninstallBtn.Click += async (_, _) =>
             {
@@ -732,16 +739,15 @@ namespace ADO_Tools_WinUI.Pages
                 listView.IsEnabled = false;
                 logBlock.Text = string.Empty;
 
-                var inst = new InstallFunctions();
-                inst.StatusUpdated += (msg) =>
+                dialogInstallFunctions = new InstallFunctions();
+                dialogInstallFunctions.StatusUpdated += (msg) =>
                 {
                     DispatcherQueue.TryEnqueue(() =>
                     {
-                        if (msg.StartsWith("Windows Installer is running.", StringComparison.OrdinalIgnoreCase)
-                            || msg.StartsWith("Windows Uninstaller is running.", StringComparison.OrdinalIgnoreCase))
+                        if (LogEntryViewModel.IsProgressMessage(msg))
                         {
                             var lines = logBlock.Text.Split(Environment.NewLine).ToList();
-                            int idx = lines.FindLastIndex(l => l.StartsWith("Windows Installer is running.") || l.StartsWith("Windows Uninstaller is running."));
+                            int idx = lines.FindLastIndex(l => LogEntryViewModel.IsProgressMessage(l));
                             if (idx >= 0)
                                 lines[idx] = msg;
                             else
@@ -757,7 +763,7 @@ namespace ADO_Tools_WinUI.Pages
                     });
                 };
 
-                bool success = await inst.UninstallSoftwareAsync(selected, cleanUninstall);
+                bool success = await dialogInstallFunctions.UninstallSoftwareAsync(selected, cleanUninstall);
 
                 if (success)
                 {
@@ -786,6 +792,7 @@ namespace ADO_Tools_WinUI.Pages
                 XamlRoot = this.XamlRoot
             };
             await dialog.ShowAsync();
+            dialogInstallFunctions?.StopInstallerTimer();
         }
 
         /// <summary>
@@ -822,9 +829,9 @@ namespace ADO_Tools_WinUI.Pages
         /// Updates the download progress bar on the UI thread.
         /// Shows the status panel when a download starts, and updates the bar value (0–100%).
         /// </summary>
-        private void OnDownloadProgressUpdated(DownloadProgressInfo info)
+        private async void OnDownloadProgressUpdated(DownloadProgressInfo info)
         {
-            DispatcherQueue.TryEnqueue(() =>
+            DispatcherQueue.TryEnqueue(async () =>
             {
                 // Make the status panel visible on the first progress update
                 if (downloadStatusPanel.Visibility == Visibility.Collapsed)
@@ -837,6 +844,10 @@ namespace ADO_Tools_WinUI.Pages
 
                 if (info.Percentage >= 100)
                 {
+                    downloadProgressBar.Value = 100;
+                    txtDownloadStatus.Text = "Download complete";
+                    txtDownloadSpeed.Text = "";
+                    await Task.Delay(1500);
                     HideDownloadStatus();
                 }
             });

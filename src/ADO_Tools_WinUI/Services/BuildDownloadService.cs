@@ -32,7 +32,8 @@ namespace ADO_Tools_WinUI.Services
         /// <summary>
         /// Downloads and extracts build artifacts for the given build.
         /// </summary>
-        public async Task DownloadAndExtractArtifactsAsync(
+        /// <returns>True if all artifacts were downloaded and extracted successfully; false otherwise.</returns>
+        public async Task<bool> DownloadAndExtractArtifactsAsync(
             string buildId,
             string downloadFolder,
             string extractFolder,
@@ -44,7 +45,7 @@ namespace ADO_Tools_WinUI.Services
             if (artifacts == null || artifacts.Count == 0)
             {
                 UpdateStatus("No build artifacts were found for the selected build.");
-                return;
+                return false;
             }
 
             foreach (var artifact in artifacts)
@@ -110,17 +111,25 @@ namespace ADO_Tools_WinUI.Services
 
                 if (shouldDownload)
                 {
-                    await DownloadWithProgressAsync(downloadUrl, zipPath, remoteSize, cancellationToken);
+                    bool downloaded = await DownloadWithProgressAsync(downloadUrl, zipPath, remoteSize, cancellationToken);
+                    if (!downloaded)
+                    {
+                        UpdateStatus($"Download failed for '{name}.zip'. Aborting.");
+                        return false;
+                    }
                 }
 
                 installFunctions.ExtractZipToDirectory(zipPath, extractFolder);
             }
+
+            return true;
         }
 
         /// <summary>
         /// Downloads a file in chunks with progress reporting and retry logic.
         /// </summary>
-        private async Task DownloadWithProgressAsync(string downloadUrl, string outputPath, long? remoteSize, CancellationToken cancellationToken)
+        /// <returns>True if the download completed successfully; false if all retries were exhausted.</returns>
+        private async Task<bool> DownloadWithProgressAsync(string downloadUrl, string outputPath, long? remoteSize, CancellationToken cancellationToken)
         {
             int chunkSize = 1024 * 1024;
             int maxRetries = 5;
@@ -201,6 +210,8 @@ namespace ADO_Tools_WinUI.Services
                     }
                 }
             }
+
+            return success;
         }
     }
 
