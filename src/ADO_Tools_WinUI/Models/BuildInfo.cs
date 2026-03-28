@@ -1,4 +1,4 @@
-namespace ADO_Tools.Models
+namespace ADO_Tools_WinUI.Models
 {
     /// <summary>
     /// Represents a single build retrieved from Azure DevOps.

@@ -1,5 +1,4 @@
 ﻿using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -9,9 +8,11 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using ADO_Tools.Models;
+using Newtonsoft.Json.Linq;
+using ADO_Tools_WinUI.Models;
 
-namespace ADO_Tools.Services
+
+namespace ADO_Tools_WinUI.Services
 {
     public class TfsRestClient
     {

@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
 using Microsoft.VisualBasic.FileIO;
 
-namespace ADO_Tools.Services
+namespace ADO_Tools_WinUI.Services
 {
     /// <summary>
     /// Provides functionality for installing, uninstalling, and managing Bentley software products.

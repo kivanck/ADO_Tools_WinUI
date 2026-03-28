@@ -7,7 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ADO_Tools.Utilities
+namespace ADO_Tools_WinUI.Utilities
 {
     class ErrorHandling
     {

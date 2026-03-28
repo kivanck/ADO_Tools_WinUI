@@ -3,9 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using ADO_Tools.Models;
-using ADO_Tools.Services;
 using Newtonsoft.Json.Linq;
+using ADO_Tools_WinUI.Models;
 
 namespace ADO_Tools_WinUI.Services
 {

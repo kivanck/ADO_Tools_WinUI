@@ -1,4 +1,4 @@
-namespace ADO_Tools.Services
+namespace ADO_Tools_WinUI.Services
 {
     /// <summary>
     /// Parses Bentley-style version strings (e.g. "23.09.02.015") into four numeric components.

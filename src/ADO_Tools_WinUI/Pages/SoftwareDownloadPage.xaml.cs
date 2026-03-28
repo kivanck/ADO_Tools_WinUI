@@ -3,13 +3,12 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
-using System.Text.RegularExpressions;
-using ADO_Tools.Services;
-using ADO_Tools_WinUI.Services;
+using System.Runtime.InteropServices.WindowsRuntime;
+using System.Threading;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using System.Threading;
-using ADO_Tools.Models;
+using ADO_Tools_WinUI.Models;
+using ADO_Tools_WinUI.Services;
 
 namespace ADO_Tools_WinUI.Pages
 {
@@ -184,7 +183,7 @@ namespace ADO_Tools_WinUI.Pages
             var client = new TfsRestClient(settings.Organization, txtProject.Text.Trim(), settings.PersonalAccessToken);
             var service = new BuildDownloadService(client);
             service.StatusUpdated += AppendLog;
-            service.ProgressUpdated += Tfs_ProgressUpdated;
+            service.DownloadProgressUpdated += OnDownloadProgressUpdated;
 
             service.ConfirmAsync = async (message, title) =>
             {
@@ -206,23 +205,12 @@ namespace ADO_Tools_WinUI.Pages
         /// Appends a log message to the on-screen log list.
         /// Progress-style messages (e.g. download percentages) update the last entry in-place
         /// to avoid flooding the list with rapidly changing lines.
-        /// Also drives the download status panel visibility.
         /// </summary>
         private void AppendLog(string message)
         {
             DispatcherQueue.TryEnqueue(() =>
             {
                 bool isProgress = LogEntryViewModel.IsProgressMessage(message);
-
-                // Show the download status bar for progress messages; hide it otherwise
-                if (isProgress)
-                {
-                    UpdateDownloadStatus(message);
-                }
-                else if (downloadStatusPanel.Visibility == Visibility.Visible)
-                {
-                    HideDownloadStatus();
-                }
 
                 // For progress lines, update the last entry in-place instead of adding a new row
                 if (isProgress && _logEntries.Count > 0 && _logEntries[^1].IsProgressEntry)
@@ -246,25 +234,13 @@ namespace ADO_Tools_WinUI.Pages
         /// Expected format: "Downloaded: 45.2 MB / 120.0 MB at 5.3 MB/s"
         /// Also handles "Windows Installer/Uninstaller is running…" messages as a special case.
         /// </summary>
-        private void UpdateDownloadStatus(string message)
+        private void UpdateDownloadStatus(DownloadProgressInfo info)
         {
-            // Installer/Uninstaller progress messages don't follow the "Downloaded:" format
-            if (message.StartsWith("Windows Installer is running", StringComparison.OrdinalIgnoreCase)
-                || message.StartsWith("Windows Uninstaller is running", StringComparison.OrdinalIgnoreCase))
-            {
-                txtDownloadSpeed.Text = "";
-                txtDownloadStatus.Text = message;
-                return;
-            }
-
-            // Extract the speed portion after the last " at " (e.g. "5.3 MB/s")
-            var speedPart = message.Substring(message.LastIndexOf(" at ") + 4);
-            txtDownloadSpeed.Text = speedPart;
-
-            // Extract the size/progress portion between "Downloaded: " and " at "
-            var atIndex = message.IndexOf(" at ");
-            var statsPart = message.Replace("Downloaded: ", "").Substring(0, atIndex - "Downloaded: ".Length + 1);
-            txtDownloadStatus.Text = statsPart;
+            txtDownloadSpeed.Text = $"{info.SpeedMBps:F2} MB/s";
+            string totalText = info.TotalMB > 0
+                ? $"{info.DownloadedMB:F2} MB of ~{info.TotalMB:F2} MB"
+                : $"{info.DownloadedMB:F2} MB";
+            txtDownloadStatus.Text = totalText;
         }
 
         /// <summary>Collapses the download status panel and resets all progress indicators.</summary>
@@ -842,11 +818,11 @@ namespace ADO_Tools_WinUI.Pages
         }
 
         /// <summary>
-        /// Callback for <see cref="BuildDownloadService.ProgressUpdated"/>.
+        /// Callback for <see cref="BuildDownloadService.DownloadProgressUpdated"/>.
         /// Updates the download progress bar on the UI thread.
         /// Shows the status panel when a download starts, and updates the bar value (0–100%).
         /// </summary>
-        private void Tfs_ProgressUpdated(double percentage)
+        private void OnDownloadProgressUpdated(DownloadProgressInfo info)
         {
             DispatcherQueue.TryEnqueue(() =>
             {
@@ -856,12 +832,12 @@ namespace ADO_Tools_WinUI.Pages
                     downloadStatusPanel.Visibility = Visibility.Visible;
                     downloadProgressBar.Maximum = 100;
                 }
-                downloadProgressBar.Value = percentage;
+                downloadProgressBar.Value = info.Percentage;
+                UpdateDownloadStatus(info);
 
-                // Placeholder: could hide/reset the panel when download reaches 100%
-                if (percentage >= 100)
+                if (info.Percentage >= 100)
                 {
-                    
+                    HideDownloadStatus();
                 }
             });
         }

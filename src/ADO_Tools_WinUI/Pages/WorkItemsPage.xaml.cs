@@ -5,16 +5,14 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using ADO_Tools.Models;
-using ADO_Tools.Services;
-using ADO_Tools.Utilities;
-using ADO_Tools_WinUI.Services;
 using CommunityToolkit.WinUI.UI.Controls;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Media;
+using ADO_Tools_WinUI.Models;
+using ADO_Tools_WinUI.Services;
 
 namespace ADO_Tools_WinUI.Pages
 {

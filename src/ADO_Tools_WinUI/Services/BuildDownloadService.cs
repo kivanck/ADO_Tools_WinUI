@@ -4,7 +4,7 @@ using System.IO.Compression;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace ADO_Tools.Services
+namespace ADO_Tools_WinUI.Services
 {
     /// <summary>
     /// Orchestrates downloading and extracting build artifacts from Azure DevOps.
@@ -15,7 +15,7 @@ namespace ADO_Tools.Services
         private readonly TfsRestClient _client;
 
         public event Action<string>? StatusUpdated;
-        public event Action<double>? ProgressUpdated;
+        public event Action<DownloadProgressInfo>? DownloadProgressUpdated;
 
         /// <summary>
         /// Callback for yes/no confirmation dialogs. The UI layer should set this.
@@ -169,7 +169,11 @@ namespace ADO_Tools.Services
                                         ? ((double)downloadedBytes / remoteSize.Value) * 100
                                         : 0;
 
-                                    ProgressUpdated?.Invoke(percentage);
+                                    DownloadProgressUpdated?.Invoke(new DownloadProgressInfo(
+                                        downloadedMB,
+                                        remoteSize.HasValue ? remoteSize.Value / (1024.0 * 1024.0) : 0,
+                                        speedMBps,
+                                        percentage));
                                     UpdateStatus($"Downloaded: {downloadedMB:F2} MB of ~{remoteSizeMB} at {speedMBps:F2} MB/s");
                                     nextLogPoint += logThreshold;
                                 }
@@ -199,4 +203,10 @@ namespace ADO_Tools.Services
             }
         }
     }
+
+    public readonly record struct DownloadProgressInfo(
+        double DownloadedMB,
+        double TotalMB,
+        double SpeedMBps,
+        double Percentage);
 }

@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace ADO_Tools.Models
+namespace ADO_Tools_WinUI.Models
 {
     public class WorkItemDto
     {

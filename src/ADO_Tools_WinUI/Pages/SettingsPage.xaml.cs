@@ -5,10 +5,9 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
-using ADO_Tools.Services;
-using ADO_Tools_WinUI.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using ADO_Tools_WinUI.Services;
 
 namespace ADO_Tools_WinUI.Pages
 {

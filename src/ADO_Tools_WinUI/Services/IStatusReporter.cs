@@ -1,6 +1,6 @@
 using System;
 
-namespace ADO_Tools.Services
+namespace ADO_Tools_WinUI.Services
 {
     /// <summary>
     /// Common interface for services that report status messages to the UI.
