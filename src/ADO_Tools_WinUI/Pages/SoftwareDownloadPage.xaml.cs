@@ -9,6 +9,7 @@ using ADO_Tools_WinUI.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using System.Threading;
+using ADO_Tools.Models;
 
 namespace ADO_Tools_WinUI.Pages
 {
@@ -23,7 +24,7 @@ namespace ADO_Tools_WinUI.Pages
         private List<BuildInfoViewModel> _allBuildViewModels = new();
 
         // Raw build info objects from Azure DevOps (used to retrieve artifact details)
-        private List<TFSFunctions.BuildInfo> _builds = new();
+        private List<BuildInfo> _builds = new();
 
         // Observable log entries displayed in the log ListView at the bottom of the page
         private readonly ObservableCollection<LogEntryViewModel> _logEntries = new();
@@ -174,16 +175,18 @@ namespace ADO_Tools_WinUI.Pages
         }
 
         /// <summary>
-        /// Creates a <see cref="TFSFunctions"/> instance wired to the page's logging,
-        /// confirmation dialogs, message dialogs, and download progress bar.
+        /// Creates a <see cref="BuildDownloadService"/> wired to the page's logging,
+        /// confirmation dialogs, and download progress bar.
         /// </summary>
-        private TFSFunctions CreateTFSFunctionsWithLogging()
+        private BuildDownloadService CreateBuildDownloadService()
         {
-            var tfs = new TFSFunctions();
-            tfs.StatusUpdated += AppendLog;
+            var settings = AppSettings.Default;
+            var client = new TfsRestClient(settings.Organization, txtProject.Text.Trim(), settings.PersonalAccessToken);
+            var service = new BuildDownloadService(client);
+            service.StatusUpdated += AppendLog;
+            service.ProgressUpdated += Tfs_ProgressUpdated;
 
-            // Wire up the confirmation dialog so TFSFunctions can ask the user Yes/No questions
-            tfs.ConfirmAsync = async (message, title) =>
+            service.ConfirmAsync = async (message, title) =>
             {
                 var dialog = new ContentDialog
                 {
@@ -196,22 +199,7 @@ namespace ADO_Tools_WinUI.Pages
                 return await dialog.ShowAsync() == ContentDialogResult.Primary;
             };
 
-            // Wire up the informational message dialog
-            tfs.ShowMessageAsync = async (message, title) =>
-            {
-                var dialog = new ContentDialog
-                {
-                    Title = title,
-                    Content = message,
-                    CloseButtonText = "OK",
-                    XamlRoot = this.XamlRoot
-                };
-                await dialog.ShowAsync();
-            };
-
-            tfs.ProgressUpdated += Tfs_ProgressUpdated;
-
-            return tfs;
+            return service;
         }
 
         /// <summary>
@@ -434,12 +422,20 @@ namespace ADO_Tools_WinUI.Pages
             progressBar.IsIndeterminate = true;
             progressBar.Visibility = Visibility.Visible;
 
-            var tfs = CreateTFSFunctionsWithLogging();
+            var client = new TfsRestClient(org, project, pat);
             int top = (int)numBuildCount.Value;
 
             AppendLog("Fetching available builds...");
 
-            _builds = await tfs.GetAvailableBuildsAsync(org, project, definitionId, pat, top);
+            try
+            {
+                _builds = await client.GetAvailableBuildsAsync(definitionId, top);
+            }
+            catch (System.Net.Http.HttpRequestException)
+            {
+                ShowMessage("Authentication failed. Please check your Personal Access Token.", "Authentication Error");
+                _builds = new();
+            }
 
             _allBuildViewModels = _builds.Select(BuildInfoViewModel.FromBuildInfo).ToList();
 
@@ -510,7 +506,7 @@ namespace ADO_Tools_WinUI.Pages
             progressBar.Visibility = Visibility.Visible;
 
             var installFunctions = CreateInstallFunctionsWithLogging();
-            var tfsFunctions = CreateTFSFunctionsWithLogging();
+            var downloadService = CreateBuildDownloadService();
 
             string buildDownloadFolder = Path.Combine(
                 downloadFolder,
@@ -525,10 +521,10 @@ namespace ADO_Tools_WinUI.Pages
             try
             {
                 // Download and extract the build artifacts
-                await tfsFunctions.DownloadLatestBuildArtifacts(
-                    settings.Organization, project, selectedBuildInfo.BuildId,
+                await downloadService.DownloadAndExtractArtifactsAsync(
+                    selectedBuildInfo.BuildId,
                     buildDownloadFolder, extractFolder,
-                    settings.PersonalAccessToken, installFunctions,
+                    installFunctions,
                     _downloadCts.Token);
             }
             catch (OperationCanceledException)

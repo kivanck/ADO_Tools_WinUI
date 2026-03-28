@@ -614,5 +614,95 @@ namespace ADO_Tools.Services
             }
             return comments;
         }
+
+        /// <summary>
+        /// Fetches available builds for a given pipeline definition.
+        /// </summary>
+        public async Task<List<BuildInfo>> GetAvailableBuildsAsync(int definitionId, int top)
+        {
+            var builds = new List<BuildInfo>();
+            string url = $"{baseUrl}/build/builds?definitions={definitionId}&$top={top}&api-version=7.1";
+
+            var response = await _http.GetAsync(url);
+            if (!response.IsSuccessStatusCode)
+                return builds;
+
+            var json = JObject.Parse(await response.Content.ReadAsStringAsync());
+
+            foreach (var build in json["value"]!)
+            {
+                string? buildId = build["id"]?.ToString();
+                string? productName = build["definition"]?["name"]?.ToString();
+                string? buildNumber = build["buildNumber"]?.ToString();
+                string? result = build["result"]?.ToString();
+                string? finishTimeRaw = build["finishTime"]?.ToString();
+                string finishTime = "";
+
+                if (!string.IsNullOrEmpty(finishTimeRaw) && DateTime.TryParse(finishTimeRaw, out var dt))
+                    finishTime = dt.ToString("dd/MM/yyyy HH:mm");
+                else
+                    finishTime = finishTimeRaw ?? "";
+
+                if (!string.IsNullOrEmpty(buildId) && !string.IsNullOrEmpty(buildNumber))
+                {
+                    var (major, majorSeq, minor, builditeration) = VersionParser.Parse(buildNumber);
+
+                    builds.Add(new BuildInfo
+                    {
+                        BuildId = buildId,
+                        ProductName = productName ?? "",
+                        Result = result ?? "",
+                        FinishTime = finishTime,
+                        DisplayVersion = buildNumber ?? "",
+                        MajorVersion = major,
+                        MajorVersionSequence = majorSeq,
+                        MinorVersion = minor,
+                        MinorVersionIteration = builditeration
+                    });
+                }
+            }
+
+            return builds;
+        }
+
+        /// <summary>
+        /// Gets the artifact size from build artifact metadata.
+        /// </summary>
+        public async Task<long?> GetArtifactSizeAsync(string buildId, string artifactName)
+        {
+            string url = $"{baseUrl}/build/builds/{buildId}/artifacts?artifactName={artifactName}&api-version=7.1";
+            var response = await _http.GetAsync(url);
+            if (!response.IsSuccessStatusCode)
+                return null;
+
+            var json = JObject.Parse(await response.Content.ReadAsStringAsync());
+            var properties = json["resource"]?["properties"] as JObject;
+            var sizeToken = properties?["artifactsize"];
+            if (sizeToken != null && long.TryParse(sizeToken.ToString(), out var size))
+                return size;
+
+            return null;
+        }
+
+        /// <summary>
+        /// Gets build artifact metadata (name, download URL, etc.).
+        /// </summary>
+        public async Task<JArray?> GetBuildArtifactsAsync(string buildId)
+        {
+            string url = $"{baseUrl}/build/builds/{buildId}/artifacts?api-version=7.1";
+            var response = await _http.GetAsync(url);
+            response.EnsureSuccessStatusCode();
+            var json = JObject.Parse(await response.Content.ReadAsStringAsync());
+            return json["value"] as JArray;
+        }
+
+        /// <summary>
+        /// Downloads a file from a URL using the authenticated HttpClient.
+        /// Exposes the underlying HttpClient for streaming downloads.
+        /// </summary>
+        public Task<HttpResponseMessage> GetStreamAsync(string url)
+        {
+            return _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+        }
     }
 }

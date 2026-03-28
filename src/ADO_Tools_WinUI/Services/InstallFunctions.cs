@@ -140,12 +140,7 @@ namespace ADO_Tools.Services
                             // Only include entries published by Bentley that have a quiet uninstall command
                             if (!string.IsNullOrEmpty(_QuietUninstallString) && !string.IsNullOrEmpty(_publisher) && _publisher.Contains("Bentley"))
                             {
-                                // Parse the version string (e.g. "23.09.02.015") into its numeric components
-                                var versionParts = (_displayVersion ?? "0.0.0.0").Split('.');
-                                int major = versionParts.Length > 0 ? int.Parse(versionParts[0]) : 0;
-                                int majorSeq = versionParts.Length > 1 ? int.Parse(versionParts[1]) : 0;
-                                int minor = versionParts.Length > 2 ? int.Parse(versionParts[2]) : 0;
-                                int builditeration = versionParts.Length > 3 ? int.Parse(versionParts[3]) : 0;
+                                var (major, majorSeq, minor, builditeration) = VersionParser.Parse(_displayVersion);
 
                                 result.Add(new InstalledSoftwareInfo
                                 {
@@ -376,26 +371,7 @@ namespace ADO_Tools.Services
                 }
             }
 
-            // Registry keys
-            ////try
-            ////{
-            ////    Registry.CurrentUser.DeleteSubKeyTree($@"Software\Bentley\{normalizedProductName}", false);
-            ////    Registry.LocalMachine.DeleteSubKeyTree($@"SOFTWARE\Bentley\{normalizedProductName}", false);
-            ////}
-            ////catch { /* log or ignore */ }
-
             UpdateStatus("Clean uninstall process completed.");
-        }
-
-
-        /// <summary>
-        /// Extracts a version string (e.g. "23.09.02.015") from a setup file name using a regex pattern.
-        /// Returns null if no matching version pattern is found.
-        /// </summary>
-        public string? ExtractVersionFromSetupFile(string setupFileName)
-        {
-            var match = Regex.Match(setupFileName, @"(\d{2}\.\d{2}\.\d{2}\.\d{3})");
-            return match.Success ? match.Value : null;
         }
 
         /// <summary>
@@ -506,45 +482,8 @@ namespace ADO_Tools.Services
             /// <summary>Third component – minor version (e.g. 02).</summary>
             public int MinorVersion { get; set; }
 
-            /// <summary>Minor release number.</summary>
-            public int MinorRelease { get; set; }
-
             /// <summary>Fourth component – build iteration (e.g. 015).</summary>
             public int MinorVersionIteration { get; set; }
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

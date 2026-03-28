@@ -1,4 +1,4 @@
-using ADO_Tools.Services;
+using ADO_Tools.Models;
 using Microsoft.UI;
 using Microsoft.UI.Xaml.Media;
 
@@ -29,7 +29,7 @@ namespace ADO_Tools_WinUI.Pages
             _ => new SolidColorBrush(Colors.IndianRed),
         };
 
-        public static BuildInfoViewModel FromBuildInfo(TFSFunctions.BuildInfo b) => new()
+        public static BuildInfoViewModel FromBuildInfo(BuildInfo b) => new()
         {
             BuildId = b.BuildId,
             ProductName = b.ProductName,

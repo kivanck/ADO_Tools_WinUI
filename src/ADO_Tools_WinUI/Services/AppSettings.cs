@@ -16,8 +16,6 @@ namespace ADO_Tools_WinUI.Services
         public static AppSettings Default => _default ??= Load();
 
         public string RootFolder { get; set; } = @"D:\ADO_Items";
-        public string ProjectName { get; set; } = "Civil";
-        public string ServerAddress { get; set; } = "https://dev.azure.com/bentleycs/";
         public string Organization { get; set; } = "";
         public string Project { get; set; } = "";
         public string WorkItemProject { get; set; } = "";
