@@ -9,6 +9,8 @@ namespace ADO_Tools_WinUI
 {
     public sealed partial class MainWindow : Window
     {
+        private SettingsWindow? _settingsWindow;
+
         public MainWindow()
         {
             InitializeComponent();
@@ -38,31 +40,28 @@ namespace ADO_Tools_WinUI
             AppWindow.Resize(new Windows.Graphics.SizeInt32(physicalWidth, physicalHeight));
         }
 
-        private async void BtnSettings_Click(object sender, RoutedEventArgs e)
+        private void BtnSettings_Click(object sender, RoutedEventArgs e)
         {
-            var settingsPage = new SettingsPage();
-            settingsPage.LoadSettings();
+            // If the settings window is already open, bring it to front
+            if (_settingsWindow != null)
+            {
+                _settingsWindow.Activate();
+                return;
+            }
 
-            settingsPage.IndexRebuilt += () =>
+            _settingsWindow = new SettingsWindow();
+
+            _settingsWindow.WireIndexRebuilt(() =>
             {
                 DispatcherQueue.TryEnqueue(() =>
                 {
                     if (FindWorkItemsPage() is WorkItemsPage page)
                         page.ReloadSearchCache();
                 });
-            };
+            });
 
-            var dialog = new ContentDialog
-            {
-                Title = "Settings",
-                Content = settingsPage,
-                CloseButtonText = "Close",
-                XamlRoot = Content.XamlRoot
-            };
-
-            await dialog.ShowAsync();
-
-            settingsPage.SaveSettings();
+            _settingsWindow.Closed += (_, _) => _settingsWindow = null;
+            _settingsWindow.Activate();
         }
 
         private WorkItemsPage? FindWorkItemsPage()
@@ -77,6 +76,7 @@ namespace ADO_Tools_WinUI
 
         private void MainWindow_Closed(object sender, WindowEventArgs args)
         {
+            _settingsWindow?.Close();
             AppSettings.Default.Save();
         }
 

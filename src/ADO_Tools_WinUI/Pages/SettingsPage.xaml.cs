@@ -37,7 +37,7 @@ namespace ADO_Tools_WinUI.Pages
 
             txtSearchResultColumns.Text = string.Join(", ", s.SearchResultColumns);
 
-            UpdateSettingsCacheStatus();
+            UpdateSettingsCacheStatusAsync();
         }
 
         public void SaveSettings()
@@ -60,7 +60,7 @@ namespace ADO_Tools_WinUI.Pages
             s.Save();
         }
 
-        private void UpdateSettingsCacheStatus()
+        private async void UpdateSettingsCacheStatusAsync()
         {
             var s = AppSettings.Default;
             if (string.IsNullOrWhiteSpace(s.Organization) || string.IsNullOrWhiteSpace(s.Project))
@@ -69,22 +69,25 @@ namespace ADO_Tools_WinUI.Pages
                 return;
             }
 
-            string modelDir = Path.Combine(AppContext.BaseDirectory, "Assets", "Models");
-            if (!File.Exists(Path.Combine(modelDir, "model.onnx")))
-            {
-                lblSettingsCacheStatus.Text = "Embedding model not found.";
-                return;
-            }
+            lblSettingsCacheStatus.Text = "Checking cache\u2026";
 
             try
             {
                 string cacheDir = Path.Combine(AppContext.BaseDirectory, "EmbeddingCache");
-                using var search = new SemanticSearchService(modelDir, cacheDir);
                 string areaPath = s.SearchAreaPath?.Trim() ?? "";
-                if (search.TryLoadCache(s.Organization, s.Project, areaPath))
-                    lblSettingsCacheStatus.Text = $"Current cache: {search.CachedItemCount} items indexed.";
-                else
-                    lblSettingsCacheStatus.Text = "No cache found. Click Build Index to create one.";
+                string cacheKey = string.IsNullOrWhiteSpace(areaPath) ? s.Project : $"{s.Project}_{areaPath}";
+                string org = s.Organization;
+
+                var (found, count) = await Task.Run(() =>
+                {
+                    var cache = new EmbeddingCache(org, cacheKey, cacheDir);
+                    bool loaded = cache.TryLoad();
+                    return (loaded, cache.Count);
+                });
+
+                lblSettingsCacheStatus.Text = found
+                    ? $"Current cache: {count} items indexed."
+                    : "No cache found. Click Update Index to create one.";
             }
             catch
             {
@@ -99,7 +102,6 @@ namespace ADO_Tools_WinUI.Pages
 
         private async void BtnSettingsForceRebuild_Click(object sender, RoutedEventArgs e)
         {
-            // Can't use ContentDialog here because SettingsPage is already inside one.
             // Use a two-click confirmation: disable Build, rename Force Rebuild to "Confirm Rebuild?"
             if (btnSettingsForceRebuild.Tag is not "confirming")
             {
@@ -182,10 +184,12 @@ namespace ADO_Tools_WinUI.Pages
             {
                 lblSettingsCacheStatus.Text = $"Index build failed: {ex.Message}";
             }
-
-            indexProgressRing.IsActive = false;
-            btnSettingsBuildIndex.IsEnabled = true;
-            btnSettingsForceRebuild.IsEnabled = true;
+            finally
+            {
+                indexProgressRing.IsActive = false;
+                btnSettingsBuildIndex.IsEnabled = true;
+                btnSettingsForceRebuild.IsEnabled = true;
+            }
         }
 
         private async void BtnValidate_Click(object sender, RoutedEventArgs e)
@@ -206,9 +210,9 @@ namespace ADO_Tools_WinUI.Pages
             ValidationStatus.Severity = InfoBarSeverity.Informational;
             ValidationStatus.IsOpen = true;
 
-            bool isValid = await ValidatePATAsync(pat, org);
+            var (success, errorMessage) = await ValidatePATAsync(pat, org);
 
-            if (isValid)
+            if (success)
             {
                 ValidationStatus.Message = "Connection successful.";
                 ValidationStatus.Severity = InfoBarSeverity.Success;
@@ -216,14 +220,14 @@ namespace ADO_Tools_WinUI.Pages
             }
             else
             {
-                ValidationStatus.Message = "Authentication failed. Check your PAT and Organisation.";
+                ValidationStatus.Message = errorMessage;
                 ValidationStatus.Severity = InfoBarSeverity.Error;
             }
 
             btnValidate.IsEnabled = true;
         }
 
-        private static async Task<bool> ValidatePATAsync(string pat, string organization)
+        private static async Task<(bool Success, string ErrorMessage)> ValidatePATAsync(string pat, string organization)
         {
             try
             {
@@ -233,11 +237,27 @@ namespace ADO_Tools_WinUI.Pages
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", authToken);
                 var response = await client.GetAsync(
                     $"https://dev.azure.com/{organization}/_apis/projects?api-version=7.1");
-                return response.StatusCode == System.Net.HttpStatusCode.OK;
+
+                return response.StatusCode switch
+                {
+                    System.Net.HttpStatusCode.OK => (true, ""),
+                    System.Net.HttpStatusCode.Unauthorized => (false, "Authentication failed. Check your PAT."),
+                    System.Net.HttpStatusCode.Forbidden => (false, "Access denied. Your PAT may lack required permissions."),
+                    System.Net.HttpStatusCode.NotFound => (false, $"Organisation '{organization}' not found."),
+                    _ => (false, $"Unexpected response: {response.StatusCode}")
+                };
             }
-            catch
+            catch (HttpRequestException ex)
             {
-                return false;
+                return (false, $"Network error: {ex.Message}");
+            }
+            catch (TaskCanceledException)
+            {
+                return (false, "Request timed out. Check your network connection.");
+            }
+            catch (Exception ex)
+            {
+                return (false, $"Validation failed: {ex.Message}");
             }
         }
 

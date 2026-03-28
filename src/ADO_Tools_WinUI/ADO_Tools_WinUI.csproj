@@ -15,6 +15,7 @@
   </PropertyGroup>
 
 
+
   <ItemGroup>
     <Content Include="Assets\SplashScreen.scale-200.png" />
     <Content Include="Assets\LockScreenLogo.scale-200.png" />
@@ -71,6 +72,11 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="UI\" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="SettingsWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </None>
   </ItemGroup>
 
   <!--
