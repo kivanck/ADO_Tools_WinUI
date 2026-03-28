@@ -267,15 +267,17 @@ namespace ADO_Tools_WinUI.Services
                 wiql = $"SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project{dateFilter}{typeFilter} ORDER BY [System.Id]";
             }
 
+            string parallelInfo = "";
+
             var queryResult = await tfsClient.QueryByWiqlAsync(
                 wiql,
                 progressCallback: (fetched, total) =>
                 {
-                    StatusUpdated?.Invoke($"Fetching work items… {fetched}/{total}");
+                    StatusUpdated?.Invoke($"Fetching work items… {fetched}/{total} {parallelInfo}");
                 },
                 statusCallback: (status) =>
                 {
-                    StatusUpdated?.Invoke(status);
+                    parallelInfo = status;
                 });
 
             var allItems = queryResult.WorkItems;
