@@ -48,6 +48,7 @@
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <TextBlock
                         Grid.Column="0"
@@ -71,6 +72,12 @@
                             <TextBlock Text="Connect" />
                         </StackPanel>
                     </Button>
+                    <TextBlock
+                        x:Name="lblConnectionStatus"
+                        Grid.Column="3"
+                        VerticalAlignment="Center"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}" />
                 </Grid>
             </StackPanel>
         </Border>
@@ -100,11 +107,20 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <ComboBox
-                                x:Name="cmbQueries"
-                                Grid.Column="0"
-                                HorizontalAlignment="Stretch"
-                                PlaceholderText="Connect to project first…" />
+                            <StackPanel Grid.Column="0">
+                                <TextBlock
+                                    x:Name="lblSelectedQuery"
+                                    Padding="8,6"
+                                    DoubleTapped="LblSelectedQuery_DoubleTapped"
+                                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                                    Visibility="Collapsed"
+                                    ToolTipService.ToolTip="Double-click to change query" />
+                                <TreeView
+                                    x:Name="treeQueries"
+                                    MaxHeight="200"
+                                    SelectionMode="Single"
+                                    DoubleTapped="TreeQueries_DoubleTapped" />
+                            </StackPanel>
                             <Button
                                 x:Name="btnReadItems"
                                 Grid.Column="1"

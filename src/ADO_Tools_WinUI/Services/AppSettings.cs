@@ -20,6 +20,8 @@ namespace ADO_Tools_WinUI.Services
         public string ServerAddress { get; set; } = "https://dev.azure.com/bentleycs/";
         public string Organization { get; set; } = "";
         public string Project { get; set; } = "";
+        public string WorkItemProject { get; set; } = "";
+        public string SelectedQueryPath { get; set; } = "";
         public string DefinitionId { get; set; } = "";
         public string PersonalAccessToken { get; set; } = "";
         public string DownloadFolder { get; set; } = "";

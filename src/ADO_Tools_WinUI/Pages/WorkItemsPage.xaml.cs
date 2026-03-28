@@ -23,7 +23,8 @@ namespace ADO_Tools_WinUI.Pages
         private enum ListMode { Query, SearchQuery, SearchBacklog, Compare }
 
         private TfsRestClient? _tfsRest;
-        private List<QueryDto> _queryList = new();
+        private List<QueryDto> _queryTree = new();
+        private List<QueryDto> _queryListFlat = new();
         private List<WorkItemDto> _workItemList = new();
         private readonly ObservableCollection<WorkItemRow> _rows = new();
         private SemanticSearchService? _semanticSearch;
@@ -72,19 +73,21 @@ namespace ADO_Tools_WinUI.Pages
             Loaded += WorkItemsPage_Loaded;
         }
 
-        private void WorkItemsPage_Loaded(object sender, RoutedEventArgs e)
+        private async void WorkItemsPage_Loaded(object sender, RoutedEventArgs e)
         {
             var s = AppSettings.Default;
-            txtProjectName.Text = s.Project;
+            txtProjectName.Text = string.IsNullOrWhiteSpace(s.WorkItemProject) ? s.Project : s.WorkItemProject;
             dataGridWorkItems.ItemsSource = _rows;
 
             TryLoadExistingCache();
+            await TryAutoConnectAsync();
         }
 
         private void TryLoadExistingCache()
         {
             var settings = AppSettings.Default;
-            if (string.IsNullOrWhiteSpace(settings.Organization) || string.IsNullOrWhiteSpace(settings.Project))
+            string project = string.IsNullOrWhiteSpace(settings.WorkItemProject) ? settings.Project : settings.WorkItemProject;
+            if (string.IsNullOrWhiteSpace(settings.Organization) || string.IsNullOrWhiteSpace(project))
                 return;
 
             string modelDir = Path.Combine(AppContext.BaseDirectory, "Assets", "Models");
@@ -97,7 +100,7 @@ namespace ADO_Tools_WinUI.Pages
                 var search = new SemanticSearchService(modelDir, cacheDir);
                 string areaPath = settings.SearchAreaPath?.Trim() ?? "";
 
-                if (search.TryLoadCache(settings.Organization, settings.Project, areaPath))
+                if (search.TryLoadCache(settings.Organization, project, areaPath))
                 {
                     _semanticSearch?.Dispose();
                     _semanticSearch = search;
@@ -118,6 +121,40 @@ namespace ADO_Tools_WinUI.Pages
             catch
             {
                 // Silently fail — user can still build index in Settings
+            }
+        }
+
+        private async Task TryAutoConnectAsync()
+        {
+            var settings = AppSettings.Default;
+            string project = string.IsNullOrWhiteSpace(settings.WorkItemProject) ? settings.Project : settings.WorkItemProject;
+
+            if (string.IsNullOrWhiteSpace(settings.Organization)
+                || string.IsNullOrWhiteSpace(settings.PersonalAccessToken)
+                || string.IsNullOrWhiteSpace(project))
+                return;
+
+            lblConnectionStatus.Text = "Connecting\u2026";
+
+            try
+            {
+                _tfsRest = new TfsRestClient(settings.Organization, project, settings.PersonalAccessToken);
+                _queryTree = await _tfsRest.GetQueriesAsync();
+                _queryListFlat = TfsRestClient.FlattenQueries(_queryTree);
+
+                PopulateQueryTree();
+
+                btnReadItems.IsEnabled = true;
+                btnDownloadSelected.IsEnabled = true;
+                btnDownloadSingle.IsEnabled = true;
+                btnFindSimilar.IsEnabled = _semanticSearch != null && _semanticSearch.IsReady;
+                btnUpdateIndex.IsEnabled = true;
+                lblConnectionStatus.Text = "Connected";
+            }
+            catch
+            {
+                _tfsRest = null;
+                lblConnectionStatus.Text = "Auto-connect failed \u2014 click Connect or check Settings.";
             }
         }
 
@@ -181,10 +218,97 @@ namespace ADO_Tools_WinUI.Pages
             }
         }
 
+        private void PopulateQueryTree()
+        {
+            treeQueries.RootNodes.Clear();
+            foreach (var root in _queryTree)
+            {
+                var node = BuildTreeNode(root);
+                // Expand Favorites by default, collapse All Queries
+                if (root.Name.Contains("Favorites"))
+                    node.IsExpanded = true;
+                treeQueries.RootNodes.Add(node);
+            }
+
+            // Restore previously selected query
+            string savedPath = AppSettings.Default.SelectedQueryPath;
+            if (!string.IsNullOrEmpty(savedPath))
+            {
+                var match = _queryListFlat.FirstOrDefault(q => q.Path == savedPath);
+                if (match != null)
+                {
+                    SelectNodeByQuery(treeQueries.RootNodes, match);
+                    CollapseQueryTree(match);
+                }
+            }
+        }
+
+        private static bool SelectNodeByQuery(IList<TreeViewNode> nodes, QueryDto target)
+        {
+            foreach (var node in nodes)
+            {
+                if (node.Content is QueryDto q && q.Path == target.Path)
+                    return true;
+
+                if (SelectNodeByQuery(node.Children, target))
+                {
+                    node.IsExpanded = true;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static TreeViewNode BuildTreeNode(QueryDto dto)
+        {
+            var node = new TreeViewNode
+            {
+                Content = dto,
+                IsExpanded = false
+            };
+            if (dto.IsFolder)
+            {
+                foreach (var child in dto.Children)
+                    node.Children.Add(BuildTreeNode(child));
+            }
+            return node;
+        }
+
+        private void TreeQueries_DoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
+        {
+            // Get the selected query
+            var selected = treeQueries.SelectedItem;
+            var q = selected as QueryDto
+                ?? (selected as TreeViewNode)?.Content as QueryDto;
+            if (q == null || q.IsFolder) return;
+
+            // Collapse tree and show selected query name
+            CollapseQueryTree(q);
+        }
+
+        private void LblSelectedQuery_DoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
+        {
+            // Expand tree again for query selection
+            lblSelectedQuery.Visibility = Visibility.Collapsed;
+            treeQueries.Visibility = Visibility.Visible;
+        }
+
+        private void CollapseQueryTree(QueryDto q)
+        {
+            lblSelectedQuery.Text = $"\u25B6 {q.Name}";
+            lblSelectedQuery.Visibility = Visibility.Visible;
+            treeQueries.Visibility = Visibility.Collapsed;
+
+            // Persist the selection
+            var s = AppSettings.Default;
+            s.SelectedQueryPath = q.Path;
+            s.Save();
+        }
+
         private void PersistSettings()
         {
             var s = AppSettings.Default;
-            s.Project = txtProjectName.Text.Trim();
+            s.WorkItemProject = txtProjectName.Text.Trim();
             s.Save();
         }
 
@@ -428,20 +552,17 @@ namespace ADO_Tools_WinUI.Pages
             try
             {
                 _tfsRest = new TfsRestClient(settings.Organization, project, settings.PersonalAccessToken);
-                _queryList = await _tfsRest.GetQueriesAsync();
+                _queryTree = await _tfsRest.GetQueriesAsync();
+                _queryListFlat = TfsRestClient.FlattenQueries(_queryTree);
 
-                cmbQueries.Items.Clear();
-                foreach (var q in _queryList)
-                    cmbQueries.Items.Add(new ComboBoxItem { Content = q.Path });
-
-                if (cmbQueries.Items.Count > 0)
-                    cmbQueries.SelectedIndex = 0;
+                PopulateQueryTree();
 
                 btnReadItems.IsEnabled = true;
                 btnDownloadSelected.IsEnabled = true;
                 btnDownloadSingle.IsEnabled = true;
                 btnFindSimilar.IsEnabled = _semanticSearch != null && _semanticSearch.IsReady;
                 btnUpdateIndex.IsEnabled = true;
+                lblConnectionStatus.Text = "Connected";
             }
             catch (Exception ex)
             {
@@ -451,6 +572,7 @@ namespace ADO_Tools_WinUI.Pages
                 btnDownloadSingle.IsEnabled = false;
                 btnFindSimilar.IsEnabled = false;
                 btnUpdateIndex.IsEnabled = false;
+                lblConnectionStatus.Text = "Connection failed";
             }
 
             progressBar.IsIndeterminate = false;
@@ -461,14 +583,13 @@ namespace ADO_Tools_WinUI.Pages
 
         private async void BtnReadItems_Click(object sender, RoutedEventArgs e)
         {
-            if (_tfsRest == null || _queryList.Count == 0) return;
+            if (_tfsRest == null || _queryListFlat.Count == 0) return;
 
-            var selectedItem = cmbQueries.SelectedItem as ComboBoxItem;
-            if (selectedItem == null) return;
-            string queryPath = (string)selectedItem.Content;
-
-            var q = _queryList.FirstOrDefault(x => x.Path == queryPath);
-            if (q == null) return;
+            // SelectedItem may be a TreeViewNode (when using RootNodes) or the Content directly
+            var selected = treeQueries.SelectedItem;
+            var q = selected as QueryDto
+                ?? (selected as TreeViewNode)?.Content as QueryDto;
+            if (q == null || q.IsFolder) return;
 
             string wiql = q.Wiql ?? "";
 
@@ -530,7 +651,7 @@ namespace ADO_Tools_WinUI.Pages
             }
 
             _listMode = ListMode.Query;
-            _lastQueryName = queryPath.Contains('/') ? queryPath[(queryPath.LastIndexOf('/') + 1)..] : queryPath;
+            _lastQueryName = q.Name;
 
             // Apply dynamic columns from the query definition
             ApplyDynamicColumns(_queryColumns);

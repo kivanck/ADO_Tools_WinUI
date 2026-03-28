@@ -45,42 +45,253 @@ namespace ADO_Tools.Services
 
         public async Task<List<QueryDto>> GetQueriesAsync()
         {
-            var result = new List<QueryDto>();
-            string url = $"{baseUrl}/wit/queries?$depth=2&api-version=7.1-preview.2";
+            // Fetch main tree and favorites in parallel
+            var allTask = FetchQueryTreeAsync();
+            var favTask = FetchAllFavoriteIdsAsync();
+
+            await Task.WhenAll(allTask, favTask);
+
+            var allQueries = allTask.Result;
+            var (myFavEntries, teamFavEntries) = favTask.Result;
+
+            var roots = new List<QueryDto>();
+
+            // Build Favorites root if there are any
+            if (myFavEntries.Count > 0 || teamFavEntries.Count > 0)
+            {
+                var favRoot = new QueryDto { Name = "\u2605 Favorites", Path = "\u2605 Favorites", IsFolder = true };
+
+                if (myFavEntries.Count > 0)
+                {
+                    var myFavFolder = new QueryDto { Name = "My Favorites", Path = "\u2605 Favorites/My Favorites", IsFolder = true };
+                    foreach (var (id, name) in myFavEntries)
+                        myFavFolder.Children.Add(new QueryDto
+                        {
+                            Id = id,
+                            Name = name,
+                            Path = $"\u2605 Favorites/My Favorites/{name}",
+                            Wiql = $"{baseUrl}/wit/wiql/{id}"
+                        });
+                    favRoot.Children.Add(myFavFolder);
+                }
+                if (teamFavEntries.Count > 0)
+                {
+                    var teamFavFolder = new QueryDto { Name = "Team Favorites", Path = "\u2605 Favorites/Team Favorites", IsFolder = true };
+                    foreach (var (id, name) in teamFavEntries)
+                        teamFavFolder.Children.Add(new QueryDto
+                        {
+                            Id = id,
+                            Name = name,
+                            Path = $"\u2605 Favorites/Team Favorites/{name}",
+                            Wiql = $"{baseUrl}/wit/wiql/{id}"
+                        });
+                    favRoot.Children.Add(teamFavFolder);
+                }
+                roots.Add(favRoot);
+            }
+
+            // Wrap the main tree under "All Queries"
+            var allRoot = new QueryDto { Name = "All Queries", Path = "All Queries", IsFolder = true };
+            allRoot.Children.AddRange(allQueries);
+            roots.Add(allRoot);
+
+            return roots;
+        }
+
+        private async Task<(List<(string id, string name)> myFavEntries, List<(string id, string name)> teamFavEntries)> FetchAllFavoriteIdsAsync()
+        {
+            var myFavEntries = new List<(string id, string name)>();
+            var teamFavEntries = new List<(string id, string name)>();
+
+            string orgBase = baseUrl.Replace("/_apis", "");
+            int lastSlash = orgBase.LastIndexOf('/');
+            string projectName = orgBase[(lastSlash + 1)..];
+            string orgUrl = orgBase[..lastSlash];
+
+            // Get the project GUID — needed for favorites API scope
+            string projectId = "";
+            try
+            {
+                var projResp = await _http.GetAsync($"{orgUrl}/_apis/projects/{projectName}?api-version=7.1-preview.4");
+                if (projResp.IsSuccessStatusCode)
+                {
+                    var projJson = JObject.Parse(await projResp.Content.ReadAsStringAsync());
+                    projectId = projJson["id"]?.ToString() ?? "";
+                }
+            }
+            catch { /* project lookup failed */ }
+
+            if (string.IsNullOrEmpty(projectId))
+                return (myFavEntries, teamFavEntries);
+
+            try
+            {
+                // Personal favorites — project-scoped
+                // This API returns favorites owned by the authenticated user (PAT owner)
+                string myFavUrl = $"{orgUrl}/_apis/Favorite/Favorites?artifactType=Microsoft.TeamFoundation.WorkItemTracking.QueryItem&artifactScopeType=Project&artifactScopeId={projectId}&api-version=7.1-preview.1";
+                var myResp = await _http.GetAsync(myFavUrl);
+                if (myResp.IsSuccessStatusCode)
+                {
+                    var json = JObject.Parse(await myResp.Content.ReadAsStringAsync());
+                    foreach (var fav in json["value"] ?? Enumerable.Empty<JToken>())
+                    {
+                        if (fav["artifactIsDeleted"]?.Value<bool>() == true) continue;
+                        var id = fav["artifactId"]?.ToString() ?? "";
+                        var name = fav["artifactName"]?.ToString() ?? "";
+                        if (!string.IsNullOrEmpty(id) && !string.IsNullOrEmpty(name))
+                            myFavEntries.Add((id, name));
+                    }
+                }
+            }
+            catch { /* personal favorites unavailable */ }
+
+            // ===================================================================================
+            // TEAM FAVORITES - NOT ACCESSIBLE VIA PAT
+            // ===================================================================================
+            // Investigation conducted March 2026:
+            //
+            // Azure DevOps team favorites are NOT accessible via REST API with PAT authentication.
+            // 
+            // APIs tested that DO NOT work with PAT:
+            // 1. Favorites API with artifactScopeType=Team — returns empty
+            // 2. Favorites API with ownerType=Team&ownerId={teamId} — ignored, returns user's favorites
+            // 3. Favorites API with identityId={teamId} — ignored, returns user's favorites  
+            // 4. Favorites API with team's subjectDescriptor — ignored, returns user's favorites
+            // 5. Queries API with $filter=favorites&$team={teamId} — requires team membership, limited
+            //
+            // The ONLY way to access team favorites is via the Contribution API:
+            //   POST _apis/Contribution/HierarchyQuery
+            //   with contributionId: "ms.vss-work-web.query-list-team-favorites-data-provider"
+            //
+            // However, this API requires SESSION authentication (cookies + Bearer token from AAD login)
+            // and returns 401 Unauthorized when using PAT authentication.
+            //
+            // Additionally, query objects themselves have no property indicating they are team favorites.
+            // The favorite relationship is stored separately and not exposed via the Queries API.
+            //
+            // WORKAROUND: Users should add team favorites to their personal favorites in the Azure DevOps
+            // web UI. This is a simple one-click operation (star icon on the query) and the queries
+            // will then appear in "My Favorites" which IS accessible via PAT.
+            // ===================================================================================
+
+            return (myFavEntries, teamFavEntries);
+        }
+
+        private async Task<List<QueryDto>> FetchQueryTreeAsync()
+        {
+            string url = $"{baseUrl}/wit/queries?$depth=2&$expand=minimal&api-version=7.1-preview.2";
             var resp = await _http.GetAsync(url);
             resp.EnsureSuccessStatusCode();
             var json = JObject.Parse(await resp.Content.ReadAsStringAsync());
 
-            void Walk(JToken node, string parentPath)
+            var roots = new List<QueryDto>();
+            foreach (var topLevel in json["value"] ?? Enumerable.Empty<JToken>())
+                roots.Add(await ParseQueryNodeAsync(topLevel, "All Queries"));
+
+            return roots;
+        }
+
+        private async Task<QueryDto> ParseQueryNodeAsync(JToken node, string parentPath)
+        {
+            var name = node["name"]?.ToString() ?? "";
+            var path = string.IsNullOrEmpty(parentPath) ? name : $"{parentPath}/{name}";
+            bool isFolder = node["isFolder"]?.Value<bool>() ?? (node["queryType"] == null);
+            bool hasChildren = node["hasChildren"]?.Value<bool>() ?? false;
+
+            var dto = new QueryDto
             {
-                if (node == null) return;
-                foreach (var q in node["value"] ?? Enumerable.Empty<JToken>())
+                Id = node["id"]?.ToString() ?? "",
+                Name = name,
+                Path = path,
+                IsFolder = isFolder,
+                Wiql = node["_links"]?["wiql"]?["href"]?.ToString() ?? ""
+            };
+
+            // If _links wasn't included (e.g. $expand=minimal), construct the wiql URL from the ID
+            if (string.IsNullOrEmpty(dto.Wiql) && !isFolder && !string.IsNullOrEmpty(dto.Id))
+                dto.Wiql = $"{baseUrl}/wit/wiql/{dto.Id}";
+
+            var children = node["children"];
+            if (children != null && children.Any())
+            {
+                foreach (var child in children)
+                    dto.Children.Add(await ParseQueryNodeAsync(child, path));
+            }
+            else if (isFolder && hasChildren)
+            {
+                // Folder has children beyond the initial depth — fetch them
+                try
                 {
-                    var name = q["name"]?.ToString() ?? "";
-                    var path = string.IsNullOrEmpty(parentPath) ? name : $"{parentPath}\\{name}";
-                    if (q["queryType"] != null)
+                    string folderUrl = $"{baseUrl}/wit/queries/{dto.Id}?$depth=2&$expand=minimal&api-version=7.1-preview.2";
+                    var folderResp = await _http.GetAsync(folderUrl);
+                    if (folderResp.IsSuccessStatusCode)
                     {
-                        result.Add(new QueryDto
+                        var folderJson = JObject.Parse(await folderResp.Content.ReadAsStringAsync());
+                        var folderChildren = folderJson["children"];
+                        if (folderChildren != null)
                         {
-                            Id = q["id"]?.ToString() ?? "",
-                            Name = name,
-                            Path = path ?? "",
-                            Wiql = q["_links"]?["wiql"]?["href"]?.ToString() ?? ""
-                        });
-                    }
-                    var children = q["children"];
-                    if (children != null && children.Any())
-                    {
-                        foreach (var child in children)
-                        {
-                            Walk(new JObject(new JProperty("value", new JArray(child))), path ?? "");
+                            foreach (var child in folderChildren)
+                                dto.Children.Add(await ParseQueryNodeAsync(child, path));
                         }
                     }
                 }
+                catch { /* skip unreachable folders */ }
             }
 
-            Walk(json, "");
+            return dto;
+        }
+
+        /// <summary>
+        /// Returns a flat list of all non-folder queries from a tree of QueryDto nodes.
+        /// </summary>
+        public static List<QueryDto> FlattenQueries(List<QueryDto> roots)
+        {
+            var result = new List<QueryDto>();
+            void Walk(List<QueryDto> nodes)
+            {
+                foreach (var node in nodes)
+                {
+                    if (!node.IsFolder)
+                        result.Add(node);
+                    Walk(node.Children);
+                }
+            }
+            Walk(roots);
             return result;
+        }
+
+        /// <summary>
+        /// Extracts work item IDs from a WIQL query response.
+        /// Flat queries return "workItems"; tree/one-hop queries return "workItemRelations".
+        /// </summary>
+        private static List<int> ExtractWorkItemIds(JObject json)
+        {
+            // Flat list queries
+            var workItems = json["workItems"];
+            if (workItems is JArray wiArray && wiArray.Count > 0)
+            {
+                return wiArray
+                    .Select(x => (int?)x["id"])
+                    .Where(i => i.HasValue)
+                    .Select(i => i!.Value)
+                    .ToList();
+            }
+
+            // Tree / one-hop queries — extract unique IDs from source and target
+            var relations = json["workItemRelations"];
+            if (relations is not JArray relArray || relArray.Count == 0) return [];
+
+            var ids = new HashSet<int>();
+            foreach (var rel in relArray)
+            {
+                var source = rel["source"];
+                var target = rel["target"];
+                if (source is JObject && source["id"] != null)
+                    ids.Add(source["id"]!.Value<int>());
+                if (target is JObject && target["id"] != null)
+                    ids.Add(target["id"]!.Value<int>());
+            }
+            return ids.ToList();
         }
 
         /// <summary>
@@ -101,11 +312,7 @@ namespace ADO_Tools.Services
                 .Where(c => !string.IsNullOrEmpty(c))
                 .ToList() ?? [];
 
-            result.WorkItemIds = json["workItems"]?
-                .Select(x => (int?)x["id"])
-                .Where(i => i.HasValue)
-                .Select(i => i!.Value)
-                .ToList() ?? [];
+            result.WorkItemIds = ExtractWorkItemIds(json);
 
             return result;
         }
@@ -115,19 +322,17 @@ namespace ADO_Tools.Services
             var result = new QueryExecutionResult();
             if (string.IsNullOrWhiteSpace(savedQueryUrl)) return result;
 
-            // Step 1: Execute the saved query directly
             var resp = await _http.GetAsync($"{savedQueryUrl}?api-version=7.1");
             resp.EnsureSuccessStatusCode();
             var json = JObject.Parse(await resp.Content.ReadAsStringAsync());
 
-            // Capture column definitions from the query
             result.Columns = json["columns"]?
                 .Select(c => c["referenceName"]?.ToString() ?? "")
                 .Where(c => !string.IsNullOrEmpty(c))
                 .ToList() ?? [];
 
-            var ids = json["workItems"]?.Select(x => (int?)x["id"])?.Where(i => i.HasValue)?.Select(i => i!.Value).ToList();
-            if (ids == null || ids.Count == 0) return result;
+            var ids = ExtractWorkItemIds(json);
+            if (ids.Count == 0) return result;
 
             result.WorkItems = await FetchWorkItemsByIdsAsync(ids);
             return result;
