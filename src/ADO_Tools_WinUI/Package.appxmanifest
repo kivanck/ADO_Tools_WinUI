@@ -15,7 +15,7 @@
   <mp:PhoneIdentity PhoneProductId="a78ca1bd-7673-454f-a293-107fb219af9a" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
   <Properties>
-    <DisplayName>ADO_Tools_WinUI</DisplayName>
+    <DisplayName>ADO Tools</DisplayName>
     <PublisherDisplayName>Kivanc.Karakas</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
@@ -34,8 +34,8 @@
       Executable="$targetnametoken$.exe"
       EntryPoint="$targetentrypoint$">
       <uap:VisualElements
-        DisplayName="ADO_Tools_WinUI"
-        Description="ADO_Tools_WinUI"
+        DisplayName="ADO Tools"
+        Description="Azure Dev Ops tools for searhing and downloading work items and software builds."
         BackgroundColor="transparent"
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png">
