@@ -83,10 +83,19 @@ namespace ADO_Tools_WinUI.Pages
 
             var s = AppSettings.Default;
             txtProjectName.Text = string.IsNullOrWhiteSpace(s.WorkItemProject) ? s.Project : s.WorkItemProject;
+            chkExcludeDone.IsChecked = s.ExcludeDone;
+            chkExcludeDone.Checked += ChkExcludeDone_Changed;
+            chkExcludeDone.Unchecked += ChkExcludeDone_Changed;
             dataGridWorkItems.ItemsSource = _rows;
 
             await TryLoadExistingCacheAsync();
             await TryAutoConnectAsync();
+        }
+
+        private void ChkExcludeDone_Changed(object sender, RoutedEventArgs e)
+        {
+            AppSettings.Default.ExcludeDone = chkExcludeDone.IsChecked == true;
+            AppSettings.Default.Save();
         }
 
         private async Task TryLoadExistingCacheAsync()
@@ -1000,6 +1009,7 @@ namespace ADO_Tools_WinUI.Pages
 
             // Switch to the Search tab so it's visually clear results come from the index
             pivotMode.SelectedIndex = 1;
+            txtSemanticSearch.Text = "";
 
             ShowProgress();
             btnFindSimilar.IsEnabled = false;
@@ -1166,6 +1176,18 @@ namespace ADO_Tools_WinUI.Pages
 
         // ── Column Picker ────────────────────────────────────────────────
 
+        /// <summary>
+        /// Matches internal/extension field prefixes that should be hidden from the column picker.
+        /// WEF_ = work item extension fields (contain GUIDs), System.Board* = board internals,
+        /// System.Watermark = internal revision counter.
+        /// </summary>
+        private static readonly Regex InternalFieldPattern = new(
+            @"^(WEF_|System\.Board|System\.Watermark|System\.Rev\b|System\.AuthorizedAs|System\.AuthorizedDate|System\.PersonId|System\.CommentCount)",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        private static bool IsInternalField(string fieldRef)
+            => InternalFieldPattern.IsMatch(fieldRef);
+
         private void PopulateColumnPicker()
         {
             columnCheckboxPanel.Children.Clear();
@@ -1175,7 +1197,10 @@ namespace ADO_Tools_WinUI.Pages
             foreach (var row in _rows)
             {
                 foreach (var key in row.FieldValues.Keys)
-                    availableFields.Add(key);
+                {
+                    if (!IsInternalField(key))
+                        availableFields.Add(key);
+                }
             }
 
             // Determine which columns are currently visible
@@ -1193,9 +1218,10 @@ namespace ADO_Tools_WinUI.Pages
 
             foreach (var fieldRef in allFields)
             {
-                string displayName = FieldDisplayNames.TryGetValue(fieldRef, out var dn)
-                    ? $"{dn} ({fieldRef})"
-                    : fieldRef;
+                string shortName = FieldDisplayNames.TryGetValue(fieldRef, out var dn)
+                    ? dn
+                    : fieldRef.Split('.').Last();
+                string displayName = $"{shortName}";
 
                 var cb = new CheckBox
                 {
@@ -1369,8 +1395,111 @@ namespace ADO_Tools_WinUI.Pages
             };
         }
 
+        private static readonly string HistoryPrefix = "\U0001F552 ";
+
+        private void SearchBox_GotFocus(object sender, RoutedEventArgs e)
+        {
+            if (sender is not AutoSuggestBox box) return;
+
+            // Show history when clicking into an empty or populated box
+            var history = box == txtSemanticSearch
+                ? AppSettings.Default.BacklogSearchHistory
+                : AppSettings.Default.QuerySearchHistory;
+            var bm25 = box == txtSemanticSearch ? _bm25BacklogSearch : _bm25QuerySearch;
+
+            var suggestions = BuildSearchSuggestions(box.Text, history, bm25);
+            if (suggestions.Count > 0)
+            {
+                box.ItemsSource = suggestions;
+                box.IsSuggestionListOpen = true;
+            }
+        }
+
+        private void TxtSemanticSearch_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
+        {
+            if (args.Reason != AutoSuggestionBoxTextChangeReason.UserInput) return;
+            sender.ItemsSource = BuildSearchSuggestions(
+                sender.Text,
+                AppSettings.Default.BacklogSearchHistory,
+                _bm25BacklogSearch);
+        }
+
+        private void TxtQuerySearch_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
+        {
+            if (args.Reason != AutoSuggestionBoxTextChangeReason.UserInput) return;
+            sender.ItemsSource = BuildSearchSuggestions(
+                sender.Text,
+                AppSettings.Default.QuerySearchHistory,
+                _bm25QuerySearch);
+        }
+
+        private void SearchBox_SuggestionChosen(AutoSuggestBox sender, AutoSuggestBoxSuggestionChosenEventArgs args)
+        {
+            if (args.SelectedItem is string chosen && chosen.StartsWith(HistoryPrefix))
+                sender.Text = chosen[HistoryPrefix.Length..];
+        }
+
+        private static List<string> BuildSearchSuggestions(
+            string text,
+            List<string> history,
+            Bm25SearchService? bm25)
+        {
+            var suggestions = new List<string>();
+            string trimmed = text?.Trim() ?? "";
+
+            // 1. History matches (full-text filter, prefixed with clock icon)
+            foreach (var h in history)
+            {
+                if (string.IsNullOrEmpty(trimmed) || h.Contains(trimmed, StringComparison.OrdinalIgnoreCase))
+                    suggestions.Add(HistoryPrefix + h);
+                if (suggestions.Count >= 5) break;
+            }
+
+            // 2. Vocabulary suggestions from BM25 index (match last word being typed)
+            if (bm25 != null && !string.IsNullOrEmpty(trimmed))
+            {
+                // Extract the last word the user is typing
+                int lastSpace = trimmed.LastIndexOf(' ');
+                string lastWord = (lastSpace >= 0 ? trimmed[(lastSpace + 1)..] : trimmed).ToLowerInvariant();
+
+                if (lastWord.Length >= 2)
+                {
+                    string prefix = lastSpace >= 0 ? trimmed[..(lastSpace + 1)] : "";
+                    int vocabCount = 0;
+
+                    foreach (var term in bm25.GetVocabulary())
+                    {
+                        if (term.StartsWith(lastWord, StringComparison.OrdinalIgnoreCase) &&
+                            !term.Equals(lastWord, StringComparison.OrdinalIgnoreCase))
+                        {
+                            suggestions.Add(prefix + term);
+                            vocabCount++;
+                            if (vocabCount >= 8) break;
+                        }
+                    }
+                }
+            }
+
+            return suggestions;
+        }
+
         private async void TxtSemanticSearch_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
         {
+            // When a suggestion is clicked, just populate the text box — don't search
+            if (args.ChosenSuggestion is string chosen)
+            {
+                sender.Text = chosen.StartsWith(HistoryPrefix) ? chosen[HistoryPrefix.Length..] : chosen;
+                return;
+            }
+
+            // Save to search history
+            string query = sender.Text?.Trim() ?? "";
+            if (!string.IsNullOrEmpty(query))
+            {
+                AppSettings.Default.AddBacklogSearchHistory(query);
+                AppSettings.Default.Save();
+            }
+
             switch (cmbSearchMode.SelectedIndex)
             {
                 case 2: await RunBm25BacklogSearchAsync(); break;
@@ -1585,6 +1714,13 @@ namespace ADO_Tools_WinUI.Pages
 
         private async void TxtQuerySearch_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
         {
+            // When a suggestion is clicked, just populate the text box — don't search
+            if (args.ChosenSuggestion is string chosen)
+            {
+                sender.Text = chosen.StartsWith(HistoryPrefix) ? chosen[HistoryPrefix.Length..] : chosen;
+                return;
+            }
+
             if (_bm25QuerySearch == null || _bm25QuerySearch.DocumentCount == 0)
             {
                 ShowMessage("Run a query first to enable search within results.", "No Query Loaded");
@@ -1597,6 +1733,10 @@ namespace ADO_Tools_WinUI.Pages
                 ClearQuerySearch();
                 return;
             }
+
+            // Save to search history
+            AppSettings.Default.AddQuerySearchHistory(query);
+            AppSettings.Default.Save();
 
             ShowProgress();
 

@@ -63,6 +63,32 @@ namespace ADO_Tools_WinUI.Services
         public double WindowHeight { get; set; } = 970;
         public bool IsMaximized { get; set; }
 
+        // ?? Search preferences ??
+
+        public bool ExcludeDone { get; set; } = true;
+        public List<string> BacklogSearchHistory { get; set; } = new();
+        public List<string> QuerySearchHistory { get; set; } = new();
+
+        private const int MaxSearchHistory = 10;
+
+        public void AddBacklogSearchHistory(string query)
+        {
+            if (string.IsNullOrWhiteSpace(query)) return;
+            BacklogSearchHistory.Remove(query);
+            BacklogSearchHistory.Insert(0, query);
+            if (BacklogSearchHistory.Count > MaxSearchHistory)
+                BacklogSearchHistory.RemoveRange(MaxSearchHistory, BacklogSearchHistory.Count - MaxSearchHistory);
+        }
+
+        public void AddQuerySearchHistory(string query)
+        {
+            if (string.IsNullOrWhiteSpace(query)) return;
+            QuerySearchHistory.Remove(query);
+            QuerySearchHistory.Insert(0, query);
+            if (QuerySearchHistory.Count > MaxSearchHistory)
+                QuerySearchHistory.RemoveRange(MaxSearchHistory, QuerySearchHistory.Count - MaxSearchHistory);
+        }
+
         public void Save()
         {
             var dir = Path.GetDirectoryName(SettingsPath)!;

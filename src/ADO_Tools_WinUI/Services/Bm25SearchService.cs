@@ -39,6 +39,12 @@ namespace ADO_Tools_WinUI.Services
         public int DocumentCount => _totalDocs;
 
         /// <summary>
+        /// Returns all unique terms in the index vocabulary (stop words already excluded).
+        /// Used for auto-suggest in the search box.
+        /// </summary>
+        public IReadOnlyCollection<string> GetVocabulary() => _docFreq.Keys;
+
+        /// <summary>
         /// Build the BM25 index from cache entries.
         /// Uses SearchableText if available, otherwise falls back to Title.
         /// </summary>

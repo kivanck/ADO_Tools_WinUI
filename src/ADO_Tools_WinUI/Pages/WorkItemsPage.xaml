@@ -148,7 +148,10 @@
                                 IsEnabled="False"
                                 PlaceholderText="Search within query results (rich text)…"
                                 QueryIcon="Find"
-                                QuerySubmitted="TxtQuerySearch_QuerySubmitted" />
+                                GotFocus="SearchBox_GotFocus"
+                                QuerySubmitted="TxtQuerySearch_QuerySubmitted"
+                                SuggestionChosen="SearchBox_SuggestionChosen"
+                                TextChanged="TxtQuerySearch_TextChanged" />
                             <Button
                                 x:Name="btnClearQuerySearch"
                                 Grid.Column="1"
@@ -199,7 +202,10 @@
                                 IsEnabled="False"
                                 PlaceholderText="Search by meaning + keywords — e.g. 'cant not in reports'…"
                                 QueryIcon="Find"
-                                QuerySubmitted="TxtSemanticSearch_QuerySubmitted" />
+                                GotFocus="SearchBox_GotFocus"
+                                QuerySubmitted="TxtSemanticSearch_QuerySubmitted"
+                                SuggestionChosen="SearchBox_SuggestionChosen"
+                                TextChanged="TxtSemanticSearch_TextChanged" />
                             <CheckBox
                                 x:Name="chkExcludeDone"
                                 Grid.Column="2"
