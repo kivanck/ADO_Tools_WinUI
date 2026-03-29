@@ -1,6 +1,7 @@
 using System;
 using ADO_Tools_WinUI.Pages;
 using ADO_Tools_WinUI.Services;
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using WinRT.Interop;
@@ -20,8 +21,8 @@ namespace ADO_Tools_WinUI
             // Set the window/taskbar icon
             AppWindow.SetIcon("Assets/ADOToolsSquare256Pixel.ico");
 
-            // Resize using DPI-aware logical size so it looks correct at any scaling
-            ResizeWindowToLogicalSize(1280, 970);
+            // Restore persisted window size or use defaults
+            RestoreWindowSize();
 
             // Wire IndexRebuilt so Work Items page reloads the search cache
             settingsPage.IndexRebuilt += () =>
@@ -35,6 +36,51 @@ namespace ADO_Tools_WinUI
 
             MainTabView.SelectionChanged += MainTabView_SelectionChanged;
             Closed += MainWindow_Closed;
+            AppWindow.Changed += AppWindow_Changed;
+        }
+
+        private void RestoreWindowSize()
+        {
+            var s = AppSettings.Default;
+
+            if (s.IsMaximized)
+            {
+                // Set a reasonable initial size first, then maximize
+                ResizeWindowToLogicalSize((int)s.WindowWidth, (int)s.WindowHeight);
+                if (AppWindow.Presenter is OverlappedPresenter presenter)
+                    presenter.Maximize();
+            }
+            else
+            {
+                ResizeWindowToLogicalSize((int)s.WindowWidth, (int)s.WindowHeight);
+            }
+        }
+
+        private void SaveWindowSize()
+        {
+            var s = AppSettings.Default;
+
+            if (AppWindow.Presenter is OverlappedPresenter presenter)
+            {
+                s.IsMaximized = presenter.State == OverlappedPresenterState.Maximized;
+            }
+
+            // Only save dimensions when not maximized (so restoring remembers the windowed size)
+            if (!s.IsMaximized)
+            {
+                var hwnd = WindowNative.GetWindowHandle(this);
+                var dpi = PInvoke.User32.GetDpiForWindow(hwnd);
+                var scalingFactor = dpi / 96.0;
+
+                s.WindowWidth = (int)(AppWindow.Size.Width / scalingFactor);
+                s.WindowHeight = (int)(AppWindow.Size.Height / scalingFactor);
+            }
+        }
+
+        private void AppWindow_Changed(AppWindow sender, AppWindowChangedEventArgs args)
+        {
+            if (args.DidSizeChange || args.DidPresenterChange)
+                SaveWindowSize();
         }
 
         private void ResizeWindowToLogicalSize(int logicalWidth, int logicalHeight)

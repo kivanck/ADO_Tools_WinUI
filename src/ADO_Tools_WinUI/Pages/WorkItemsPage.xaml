@@ -376,6 +376,7 @@
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
                         <!--  Icon + title  -->
@@ -408,6 +409,36 @@
                             Grid.Column="3"
                             VerticalAlignment="Center"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                        <Button
+                            x:Name="btnColumnPicker"
+                            Grid.Column="4"
+                            Height="28"
+                            Margin="8,0,0,0"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center"
+                            Padding="6,4"
+                            ToolTipService.ToolTip="Show/hide columns">
+                            <FontIcon FontSize="12" Glyph="&#xE71D;" />
+                            <Button.Flyout>
+                                <Flyout x:Name="columnPickerFlyout" Placement="BottomEdgeAlignedRight">
+                                    <StackPanel x:Name="columnPickerPanel" MinWidth="250" Spacing="4">
+                                            <Button
+                                                x:Name="btnResetColumns"
+                                                Margin="0,0,0,4"
+                                                HorizontalAlignment="Stretch"
+                                                Click="BtnResetColumns_Click"
+                                                Content="Reset to Default" />
+                                            <TextBlock
+                                                Style="{StaticResource CaptionTextBlockStyle}"
+                                                Text="Toggle columns" />
+                                            <ScrollViewer MaxHeight="400" VerticalScrollBarVisibility="Auto">
+                                                <StackPanel x:Name="columnCheckboxPanel" Spacing="2" />
+                                            </ScrollViewer>
+                                        </StackPanel>
+                                </Flyout>
+                            </Button.Flyout>
+                        </Button>
                     </Grid>
                 </Border>
 

@@ -72,6 +72,8 @@ namespace ADO_Tools_WinUI.Pages
         {
             InitializeComponent();
             Loaded += WorkItemsPage_Loaded;
+            Unloaded += (_, _) => SaveColumnWidths();
+            columnPickerFlyout.Opening += ColumnPickerFlyout_Opening;
         }
 
         private async void WorkItemsPage_Loaded(object sender, RoutedEventArgs e)
@@ -521,15 +523,36 @@ namespace ADO_Tools_WinUI.Pages
 
         /// <summary>
         /// Rebuilds the DataGrid columns to match the given column list.
-        /// Falls back to default columns when columns is empty (backlog search mode).
+        /// Falls back to search columns when columns is empty (backlog search mode).
+        /// Applies persisted widths and uses Title as the flexible star column.
         /// </summary>
         private void ApplyDynamicColumns(List<string> columns)
         {
-            if (columns.Count == 0)
+            // Save current column widths before rebuilding
+            if (dataGridWorkItems.Columns.Count > 0)
+                SaveColumnWidths();
+
+            bool isSearchMode = columns.Count == 0;
+
+            if (isSearchMode)
             {
-                var configured = AppSettings.Default.SearchResultColumns;
-                columns = configured.Count > 0 ? configured : DefaultColumns;
+                columns = AppSettings.Default.SearchColumns.Count > 0
+                    ? AppSettings.Default.SearchColumns
+                    : DefaultColumns;
             }
+            else
+            {
+                // Query mode: filter out hidden columns, or use persisted override
+                var settings = AppSettings.Default;
+                if (settings.QueryColumns.Count > 0)
+                    columns = settings.QueryColumns;
+                else if (settings.HiddenQueryColumns.Count > 0)
+                    columns = columns.Where(c => !settings.HiddenQueryColumns.Contains(c)).ToList();
+            }
+
+            var widths = isSearchMode
+                ? AppSettings.Default.SearchColumnWidths
+                : AppSettings.Default.QueryColumnWidths;
 
             dataGridWorkItems.Columns.Clear();
 
@@ -555,29 +578,56 @@ namespace ADO_Tools_WinUI.Pages
                 var col = new DataGridTextColumn
                 {
                     Header = header,
+                    Tag = fieldRef,
                     Binding = new Binding { Path = new PropertyPath(bindingPath) },
                     CanUserResize = true,
                     CanUserSort = true,
                 };
 
-                // Set sensible default widths
-                if (fieldRef == "System.Id")
-                    col.Width = new DataGridLength(80);
-                else if (fieldRef == "System.Title")
-                    col.Width = new DataGridLength(1, DataGridLengthUnitType.Star);
-                else if (fieldRef == "System.State" || fieldRef == "System.CreatedDate" || fieldRef == "System.ChangedDate")
-                    col.Width = new DataGridLength(90);
-                else if (fieldRef == "System.CreatedBy" || fieldRef == "System.AssignedTo" || fieldRef == "System.ChangedBy")
-                    col.Width = new DataGridLength(130);
-                else if (fieldRef == "System.WorkItemType")
-                    col.Width = new DataGridLength(100);
-                else if (fieldRef == "System.IterationPath" || fieldRef == "System.AreaPath")
-                    col.Width = new DataGridLength(1, DataGridLengthUnitType.Star);
+                // Use persisted width if available, otherwise use defaults
+                if (widths.TryGetValue(fieldRef, out double savedWidth) && savedWidth > 0)
+                {
+                    // Title gets Star if it's the flexible column and no saved width
+                    col.Width = new DataGridLength(savedWidth);
+                }
                 else
-                    col.Width = new DataGridLength(120);
+                {
+                    col.Width = GetDefaultColumnWidth(fieldRef);
+                }
 
                 dataGridWorkItems.Columns.Add(col);
             }
+        }
+
+        private static DataGridLength GetDefaultColumnWidth(string fieldRef)
+        {
+            return fieldRef switch
+            {
+                "System.Id" => new DataGridLength(80),
+                "System.Title" => new DataGridLength(300),
+                "System.State" or "System.CreatedDate" or "System.ChangedDate" => new DataGridLength(90),
+                "System.CreatedBy" or "System.AssignedTo" or "System.ChangedBy" => new DataGridLength(130),
+                "System.WorkItemType" => new DataGridLength(100),
+                "System.IterationPath" or "System.AreaPath" => new DataGridLength(200),
+                _ => new DataGridLength(120)
+            };
+        }
+
+        private void SaveColumnWidths()
+        {
+            bool isSearchMode = _listMode == ListMode.SearchBacklog || _listMode == ListMode.Compare;
+            var widths = isSearchMode
+                ? AppSettings.Default.SearchColumnWidths
+                : AppSettings.Default.QueryColumnWidths;
+
+            widths.Clear();
+            foreach (var col in dataGridWorkItems.Columns)
+            {
+                if (col.Tag is string fieldRef && col.ActualWidth > 0)
+                    widths[fieldRef] = col.ActualWidth;
+            }
+
+            AppSettings.Default.Save();
         }
 
         // Event Handlers
@@ -1112,6 +1162,125 @@ namespace ADO_Tools_WinUI.Pages
                 FileName = row.HtmlUrl,
                 UseShellExecute = true
             });
+        }
+
+        // ── Column Picker ────────────────────────────────────────────────
+
+        private void PopulateColumnPicker()
+        {
+            columnCheckboxPanel.Children.Clear();
+
+            // Discover all available fields from the loaded rows
+            var availableFields = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var row in _rows)
+            {
+                foreach (var key in row.FieldValues.Keys)
+                    availableFields.Add(key);
+            }
+
+            // Determine which columns are currently visible
+            var visibleColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var col in dataGridWorkItems.Columns)
+            {
+                if (col.Tag is string fieldRef)
+                    visibleColumns.Add(fieldRef);
+            }
+
+            // Merge: show visible columns first, then additional available ones
+            var allFields = visibleColumns
+                .Union(availableFields, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            foreach (var fieldRef in allFields)
+            {
+                string displayName = FieldDisplayNames.TryGetValue(fieldRef, out var dn)
+                    ? $"{dn} ({fieldRef})"
+                    : fieldRef;
+
+                var cb = new CheckBox
+                {
+                    Content = displayName,
+                    Tag = fieldRef,
+                    IsChecked = visibleColumns.Contains(fieldRef),
+                    MinWidth = 0,
+                    Padding = new Thickness(4, 2, 4, 2)
+                };
+                cb.Checked += ColumnCheckbox_Changed;
+                cb.Unchecked += ColumnCheckbox_Changed;
+                columnCheckboxPanel.Children.Add(cb);
+            }
+        }
+
+        private void ColumnCheckbox_Changed(object sender, RoutedEventArgs e)
+        {
+            // Collect checked fields in display order
+            var selected = columnCheckboxPanel.Children
+                .OfType<CheckBox>()
+                .Where(cb => cb.IsChecked == true)
+                .Select(cb => cb.Tag as string)
+                .Where(f => f != null)
+                .Cast<string>()
+                .ToList();
+
+            if (selected.Count == 0) return;
+
+            bool isSearchMode = _listMode == ListMode.SearchBacklog || _listMode == ListMode.Compare;
+            var settings = AppSettings.Default;
+
+            if (isSearchMode)
+            {
+                settings.SearchColumns = selected;
+            }
+            else
+            {
+                settings.QueryColumns = selected;
+            }
+            settings.Save();
+
+            // Rebuild with the new selection
+            if (isSearchMode)
+                ApplyDynamicColumns([]);
+            else
+                ApplyDynamicColumns(_queryColumns);
+        }
+
+        private void BtnResetColumns_Click(object sender, RoutedEventArgs e)
+        {
+            bool isSearchMode = _listMode == ListMode.SearchBacklog || _listMode == ListMode.Compare;
+            var settings = AppSettings.Default;
+
+            if (isSearchMode)
+            {
+                settings.SearchColumns = new List<string>
+                {
+                    "System.Id", "System.Title", "System.State",
+                    "System.AreaPath", "Microsoft.VSTS.Common.Priority",
+                    "Microsoft.VSTS.Common.Severity", "System.Tags",
+                    "System.CreatedBy", "System.CreatedDate",
+                    "System.WorkItemType", "System.IterationPath"
+                };
+                settings.SearchColumnWidths.Clear();
+            }
+            else
+            {
+                settings.QueryColumns.Clear();
+                settings.HiddenQueryColumns.Clear();
+                settings.QueryColumnWidths.Clear();
+            }
+            settings.Save();
+
+            if (isSearchMode)
+                ApplyDynamicColumns([]);
+            else
+                ApplyDynamicColumns(_queryColumns);
+
+            // Refresh the picker checkboxes
+            PopulateColumnPicker();
+        }
+
+        private void ColumnPickerFlyout_Opening(object sender, object e)
+        {
+            PopulateColumnPicker();
         }
 
         /// <summary>

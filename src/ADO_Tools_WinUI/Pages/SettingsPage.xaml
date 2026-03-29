@@ -163,62 +163,11 @@
                 </StackPanel>
             </Border>
 
-            <!--  ROW 1, LEFT: Search Result Columns (stretches to match right)  -->
-            <Border
-                Grid.Row="1"
-                Grid.Column="0"
-                Padding="20,16"
-                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                BorderThickness="1"
-                CornerRadius="8">
-                <Grid RowSpacing="12">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
-
-                    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="10">
-                        <Border
-                            Width="28"
-                            Height="28"
-                            Background="#0078D4"
-                            CornerRadius="6">
-                            <FontIcon
-                                HorizontalAlignment="Center"
-                                VerticalAlignment="Center"
-                                FontSize="14"
-                                Foreground="White"
-                                Glyph="&#xE9F5;" />
-                        </Border>
-                        <TextBlock
-                            VerticalAlignment="Center"
-                            Style="{StaticResource BodyStrongTextBlockStyle}"
-                            Text="Search Result Columns" />
-                    </StackPanel>
-
-                    <TextBlock
-                        Grid.Row="1"
-                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                        Text="Comma-separated ADO field reference names shown when displaying search and find-similar results. Use names like System.Id, System.Title, System.AreaPath, Microsoft.VSTS.Common.Priority, etc."
-                        TextWrapping="Wrap" />
-
-                    <TextBox
-                        x:Name="txtSearchResultColumns"
-                        Grid.Row="2"
-                        AcceptsReturn="True"
-                        Header="Columns"
-                        PlaceholderText="System.Id, System.Title, System.State, System.AreaPath, ..."
-                        TextWrapping="Wrap"
-                        ScrollViewer.VerticalScrollBarVisibility="Auto" />
-                </Grid>
-            </Border>
-
-            <!--  ROW 1, RIGHT: Paths + About stacked  -->
+            <!--  ROW 1: Paths + About stacked  -->
             <StackPanel
                 Grid.Row="1"
-                Grid.Column="1"
+                Grid.Column="0"
+                Grid.ColumnSpan="2"
                 Spacing="12">
 
                 <!--  Paths Card  -->

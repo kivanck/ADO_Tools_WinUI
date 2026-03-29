@@ -1,4 +1,5 @@
 using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
@@ -34,7 +35,14 @@ namespace ADO_Tools_WinUI.Services
         public string ProductName { get; set; } = "OpenRail Designer";
         public string SearchAreaPath { get; set; } = @"Civil\OpenCivil Designer";
         public string SearchCutoffDate { get; set; } = "2020-01-01";
-        public List<string> SearchResultColumns { get; set; } = new()
+
+        /// <summary>Legacy property — migrated to SearchColumns on first load.</summary>
+        public List<string> SearchResultColumns { get; set; } = new();
+
+        // ?? Column picker: visible columns per mode ??
+
+        public List<string> QueryColumns { get; set; } = new();
+        public List<string> SearchColumns { get; set; } = new()
         {
             "System.Id", "System.Title", "System.State",
             "System.AreaPath", "Microsoft.VSTS.Common.Priority",
@@ -42,6 +50,18 @@ namespace ADO_Tools_WinUI.Services
             "System.CreatedBy", "System.CreatedDate",
             "System.WorkItemType", "System.IterationPath"
         };
+        public List<string> HiddenQueryColumns { get; set; } = new();
+
+        // ?? Column widths per mode ??
+
+        public Dictionary<string, double> QueryColumnWidths { get; set; } = new();
+        public Dictionary<string, double> SearchColumnWidths { get; set; } = new();
+
+        // ?? Window dimensions ??
+
+        public double WindowWidth { get; set; } = 1280;
+        public double WindowHeight { get; set; } = 970;
+        public bool IsMaximized { get; set; }
 
         public void Save()
         {
@@ -60,7 +80,17 @@ namespace ADO_Tools_WinUI.Services
                 try
                 {
                     var json = File.ReadAllText(SettingsPath);
-                    return JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
+                    var settings = JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
+
+                    // One-time migration: SearchResultColumns ? SearchColumns
+                    if (settings.SearchResultColumns.Count > 0 && settings.SearchColumns.Count == 0)
+                    {
+                        settings.SearchColumns = new List<string>(settings.SearchResultColumns);
+                        settings.SearchResultColumns.Clear();
+                        settings.Save();
+                    }
+
+                    return settings;
                 }
                 catch
                 {
