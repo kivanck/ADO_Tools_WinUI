@@ -10,7 +10,7 @@
   <Identity
     Name="a78ca1bd-7673-454f-a293-107fb219af9a"
     Publisher="CN=Kivanc.Karakas"
-    Version="1.0.0.0" />
+    Version="1.0.3.0" />
 
   <mp:PhoneIdentity PhoneProductId="a78ca1bd-7673-454f-a293-107fb219af9a" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 

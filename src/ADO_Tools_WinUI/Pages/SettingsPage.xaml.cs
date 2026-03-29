@@ -7,6 +7,8 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Windows.Storage.Pickers;
+using WinRT.Interop;
 using ADO_Tools_WinUI.Services;
 
 namespace ADO_Tools_WinUI.Pages
@@ -43,6 +45,19 @@ namespace ADO_Tools_WinUI.Pages
                 _cacheStatusLoaded = true;
                 UpdateSettingsCacheStatusAsync();
             }
+
+            try
+            {
+                var v = Windows.ApplicationModel.Package.Current.Id.Version;
+                lblAboutTitle.Text = $"ADO Tools \u2014 Azure DevOps Productivity Suite (Version {v.Major}.{v.Minor}.{v.Build}.{v.Revision})";
+            }
+            catch
+            {
+                var v = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+                lblAboutTitle.Text = v != null
+                    ? $"ADO Tools \u2014 Azure DevOps Productivity Suite (Version {v.Major}.{v.Minor}.{v.Build})"
+                    : "ADO Tools \u2014 Azure DevOps Productivity Suite";
+            }
         }
 
         public void SaveSettings()
@@ -78,7 +93,7 @@ namespace ADO_Tools_WinUI.Pages
 
             try
             {
-                string cacheDir = Path.Combine(AppContext.BaseDirectory, "EmbeddingCache");
+                string cacheDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ADO_Tools_WinUI", "EmbeddingCache");
                 string areaPath = s.SearchAreaPath?.Trim() ?? "";
                 string cacheKey = string.IsNullOrWhiteSpace(areaPath) ? s.Project : $"{s.Project}_{areaPath}";
                 string org = s.Organization;
@@ -157,7 +172,7 @@ namespace ADO_Tools_WinUI.Pages
 
             try
             {
-                string cacheDir = Path.Combine(AppContext.BaseDirectory, "EmbeddingCache");
+                string cacheDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ADO_Tools_WinUI", "EmbeddingCache");
                 using var search = new SemanticSearchService(modelDir, cacheDir);
                 search.StatusUpdated += msg =>
                     DispatcherQueue.TryEnqueue(() => lblSettingsCacheStatus.Text = msg);
@@ -195,6 +210,29 @@ namespace ADO_Tools_WinUI.Pages
                 btnSettingsBuildIndex.IsEnabled = true;
                 btnSettingsForceRebuild.IsEnabled = true;
             }
+        }
+
+        private async void BtnBrowseRootFolder_Click(object sender, RoutedEventArgs e)
+        {
+            var folder = await PickFolderAsync();
+            if (folder != null)
+                txtRootFolder.Text = folder.Path;
+        }
+
+        private async void BtnBrowseDownloadFolder_Click(object sender, RoutedEventArgs e)
+        {
+            var folder = await PickFolderAsync();
+            if (folder != null)
+                txtDownloadFolder.Text = folder.Path;
+        }
+
+        private static async Task<Windows.Storage.StorageFolder?> PickFolderAsync()
+        {
+            var picker = new FolderPicker();
+            picker.SuggestedStartLocation = PickerLocationId.Desktop;
+            picker.FileTypeFilter.Add("*");
+            InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.MainWindow));
+            return await picker.PickSingleFolderAsync();
         }
 
         private async void BtnValidate_Click(object sender, RoutedEventArgs e)
@@ -266,5 +304,6 @@ namespace ADO_Tools_WinUI.Pages
             }
         }
 
+            
     }
 }

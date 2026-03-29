@@ -100,7 +100,7 @@ namespace ADO_Tools_WinUI.Pages
 
             try
             {
-                string cacheDir = Path.Combine(AppContext.BaseDirectory, "EmbeddingCache");
+                string cacheDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ADO_Tools_WinUI", "EmbeddingCache");
                 string areaPath = settings.SearchAreaPath?.Trim() ?? "";
                 string org = settings.Organization;
 
@@ -635,7 +635,7 @@ namespace ADO_Tools_WinUI.Pages
                 else if (!string.IsNullOrEmpty(q.Id))
                 {
                     // Step 2: Load cache and get lightweight ChangedDates from API
-                    string cacheDir = Path.Combine(AppContext.BaseDirectory, "QueryCache");
+                    string cacheDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ADO_Tools_WinUI", "QueryCache");
                     _querySearchCache = new QuerySearchCache(q.Id, cacheDir);
                     _querySearchCache.TryLoad();
 

@@ -9,8 +9,6 @@ namespace ADO_Tools_WinUI
 {
     public sealed partial class MainWindow : Window
     {
-        private int _previousTabIndex;
-
         public MainWindow()
         {
             InitializeComponent();
@@ -51,38 +49,16 @@ namespace ADO_Tools_WinUI
             AppWindow.Resize(new Windows.Graphics.SizeInt32(physicalWidth, physicalHeight));
         }
 
-        private void BtnSettings_Click(object sender, RoutedEventArgs e)
-        {
-            if (MainTabView.SelectedItem == settingsTab)
-            {
-                // Already on settings — go back to previous tab
-                MainTabView.SelectedIndex = _previousTabIndex;
-            }
-            else
-            {
-                // Switch to settings tab
-                MainTabView.SelectedItem = settingsTab;
-            }
-        }
-
         private void MainTabView_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             bool goingToSettings = MainTabView.SelectedItem == settingsTab;
             bool leavingSettings = e.RemovedItems.Count > 0 && e.RemovedItems[0] == settingsTab;
 
             if (goingToSettings)
-            {
-                // Remember where we came from so the gear button can toggle back
-                if (e.RemovedItems.Count > 0 && e.RemovedItems[0] is TabViewItem prev)
-                    _previousTabIndex = MainTabView.TabItems.IndexOf(prev);
-
                 settingsPage.LoadSettings();
-            }
 
             if (leavingSettings)
-            {
                 settingsPage.SaveSettings();
-            }
         }
 
         private WorkItemsPage? FindWorkItemsPage()

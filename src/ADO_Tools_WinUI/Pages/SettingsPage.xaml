@@ -248,14 +248,46 @@
                                 Text="Download Paths" />
                         </StackPanel>
 
-                        <TextBox
-                            x:Name="txtRootFolder"
-                            Header="Work Items Download Folder"
-                            PlaceholderText="e.g. D:\ADO_Items" />
-                        <TextBox
-                            x:Name="txtDownloadFolder"
-                            Header="Software Download Folder"
-                            PlaceholderText="e.g. D:\Downloads\Builds" />
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Work Items Download Folder" Style="{StaticResource CaptionTextBlockStyle}" />
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBox
+                                    x:Name="txtRootFolder"
+                                    Grid.Column="0"
+                                    PlaceholderText="e.g. D:\ADO_Items" />
+                                <Button
+                                    Grid.Column="1"
+                                    VerticalAlignment="Bottom"
+                                    Click="BtnBrowseRootFolder_Click"
+                                    ToolTipService.ToolTip="Browse…">
+                                    <FontIcon FontSize="14" Glyph="&#xED25;" />
+                                </Button>
+                            </Grid>
+                        </StackPanel>
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Software Download Folder" Style="{StaticResource CaptionTextBlockStyle}" />
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBox
+                                    x:Name="txtDownloadFolder"
+                                    Grid.Column="0"
+                                    PlaceholderText="e.g. D:\Downloads\Builds" />
+                                <Button
+                                    Grid.Column="1"
+                                    VerticalAlignment="Bottom"
+                                    Click="BtnBrowseDownloadFolder_Click"
+                                    ToolTipService.ToolTip="Browse…">
+                                    <FontIcon FontSize="14" Glyph="&#xED25;" />
+                                </Button>
+                            </Grid>
+                        </StackPanel>
                     </StackPanel>
                 </Border>
 
@@ -285,7 +317,7 @@
                                 Style="{StaticResource BodyStrongTextBlockStyle}"
                                 Text="About" />
                         </StackPanel>
-                        <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="ADO Tools — Azure DevOps Productivity Suite" />
+                        <TextBlock x:Name="lblAboutTitle" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                         <TextBlock
                             FontSize="12"
                             Foreground="{ThemeResource TextFillColorTertiaryBrush}"

@@ -43,21 +43,7 @@
                 <Grid Width="24" Background="Transparent" />
             </TabView.TabStripHeader>
 
-            <TabView.TabStripFooter>
-                <Grid HorizontalAlignment="Stretch">
-                    <Button
-                        x:Name="btnSettings"
-                        Margin="0,0,140,0"
-                        HorizontalAlignment="Right"
-                        VerticalAlignment="Center"
-                        Click="BtnSettings_Click"
-                        ToolTipService.ToolTip="Settings">
-                        <SymbolIcon Symbol="Setting" />
-                    </Button>
-                </Grid>
-            </TabView.TabStripFooter>
-
-            <TabViewItem IsClosable="False">
+            <TabViewItem x:Name="workItemsTab" IsClosable="False">
                 <TabViewItem.HeaderTemplate>
                     <DataTemplate>
                         <StackPanel
@@ -65,7 +51,7 @@
                             Padding="8,4"
                             Orientation="Horizontal"
                             Spacing="12">
-                            <SymbolIcon Symbol="Library" />
+                            <SymbolIcon Foreground="#5B9BD5" Symbol="Library" />
                             <TextBlock
                                 FontSize="16"
                                 FontWeight="SemiBold"
@@ -76,8 +62,7 @@
                 <pages:WorkItemsPage />
             </TabViewItem>
 
-
-            <TabViewItem IsClosable="False">
+            <TabViewItem x:Name="downloadsTab" IsClosable="False">
                 <TabViewItem.HeaderTemplate>
                     <DataTemplate>
                         <StackPanel
@@ -85,7 +70,7 @@
                             Padding="8,4"
                             Orientation="Horizontal"
                             Spacing="12">
-                            <SymbolIcon Symbol="Download" />
+                            <SymbolIcon Foreground="#6BA368" Symbol="Download" />
                             <TextBlock
                                 FontSize="16"
                                 FontWeight="SemiBold"
@@ -96,8 +81,23 @@
                 <pages:SoftwareDownloadPage />
             </TabViewItem>
 
-            <!--  Settings tab — header hidden, navigated via gear button  -->
-            <TabViewItem x:Name="settingsTab" IsClosable="False" Visibility="Collapsed">
+            <TabViewItem x:Name="settingsTab" IsClosable="False">
+                <TabViewItem.HeaderTemplate>
+                    <DataTemplate>
+                        <StackPanel
+                            MinWidth="200"
+                            Padding="8,4"
+                            Opacity="0.65"
+                            Orientation="Horizontal"
+                            Spacing="12">
+                            <SymbolIcon Symbol="Setting" />
+                            <TextBlock
+                                FontSize="16"
+                                FontWeight="SemiBold"
+                                Text="Settings" />
+                        </StackPanel>
+                    </DataTemplate>
+                </TabViewItem.HeaderTemplate>
                 <pages:SettingsPage x:Name="settingsPage" />
             </TabViewItem>
 
