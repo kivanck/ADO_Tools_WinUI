@@ -14,7 +14,6 @@ namespace ADO_Tools_WinUI.Services
 
         private static AppSettings? _default;
         public static AppSettings Default => _default ??= Load();
-
         public string RootFolder { get; set; } = "";
         public string Organization { get; set; } = "bentleycs";
         public string Project { get; set; } = "civil";

@@ -197,7 +197,7 @@
                                 x:Name="txtSemanticSearch"
                                 Grid.Column="1"
                                 IsEnabled="False"
-                                PlaceholderText="Search by meaning — e.g. 'crash when opening large files'…"
+                                PlaceholderText="Search by meaning + keywords — e.g. 'cant not in reports'…"
                                 QueryIcon="Find"
                                 QuerySubmitted="TxtSemanticSearch_QuerySubmitted" />
                             <CheckBox
@@ -331,10 +331,10 @@
                         VerticalAlignment="Center"
                         Click="BtnFindSimilar_Click"
                         IsEnabled="False"
-                        ToolTipService.ToolTip="Find similar work items across the backlog using semantic + keyword search">
+                        ToolTipService.ToolTip="Find similar work items from the cached search index (Search tab)">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <FontIcon FontSize="14" Glyph="&#xE721;" />
-                            <TextBlock Text="Find Similar" />
+                            <TextBlock Text="Find Similar (Cache)" />
                         </StackPanel>
                     </Button>
 
@@ -442,6 +442,7 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
                 <TextBlock
@@ -455,9 +456,20 @@
                     Grid.Column="1"
                     VerticalAlignment="Center"
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <HyperlinkButton
+                    x:Name="btnOpenDownloadFolder"
+                    Grid.Column="2"
+                    VerticalAlignment="Center"
+                    Click="BtnOpenDownloadFolder_Click"
+                    Visibility="Collapsed">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon FontSize="12" Glyph="&#xE838;" />
+                        <TextBlock x:Name="lblDownloadPath" Style="{StaticResource CaptionTextBlockStyle}" />
+                    </StackPanel>
+                </HyperlinkButton>
                 <ProgressBar
                     x:Name="progressBar"
-                    Grid.Column="2"
+                    Grid.Column="3"
                     VerticalAlignment="Center"
                     IsIndeterminate="False"
                     Visibility="Collapsed" />

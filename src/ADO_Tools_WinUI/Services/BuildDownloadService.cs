@@ -189,6 +189,11 @@ namespace ADO_Tools_WinUI.Services
                             }
                         }
                         success = true;
+
+                        // Fire a final 100% progress event so the UI always gets the completion signal
+                        double finalMB = downloadedBytes / (1024.0 * 1024.0);
+                        double totalMB = remoteSize.HasValue ? remoteSize.Value / (1024.0 * 1024.0) : finalMB;
+                        DownloadProgressUpdated?.Invoke(new DownloadProgressInfo(finalMB, totalMB, 0, 100));
                     }
                 }
                 catch (OperationCanceledException)

@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using CommunityToolkit.WinUI.UI.Controls;
@@ -169,6 +171,11 @@ namespace ADO_Tools_WinUI.Pages
                 btnUpdateIndex.IsEnabled = true;
                 lblConnectionStatus.Text = "Connected";
             }
+            catch (HttpRequestException ex)
+            {
+                _tfsRest = null;
+                lblConnectionStatus.Text = $"Could not reach the server. Check your internet connection or organization URL. ({ex.Message})";
+            }
             catch (Exception ex)
             {
                 _tfsRest = null;
@@ -176,7 +183,7 @@ namespace ADO_Tools_WinUI.Pages
             }
         }
 
-        // ?? View Model Row ??????????????????????????????????????????????
+        // ?? View Model Row
 
         public class WorkItemRow
         {
@@ -382,6 +389,30 @@ namespace ADO_Tools_WinUI.Pages
             return $"{size:0.##} {units[order]}";
         }
 
+        private string? _lastDownloadFolder;
+
+        private void ShowDownloadFolderLink(string? folderPath)
+        {
+            if (string.IsNullOrWhiteSpace(folderPath))
+            {
+                btnOpenDownloadFolder.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            _lastDownloadFolder = folderPath;
+            string dirName = Path.GetFileName(Path.GetDirectoryName(folderPath.TrimEnd(Path.DirectorySeparatorChar)) ?? "")
+                             + Path.DirectorySeparatorChar
+                             + Path.GetFileName(folderPath.TrimEnd(Path.DirectorySeparatorChar));
+            lblDownloadPath.Text = $"Open {dirName}";
+            btnOpenDownloadFolder.Visibility = Visibility.Visible;
+        }
+
+        private void BtnOpenDownloadFolder_Click(object sender, RoutedEventArgs e)
+        {
+            if (!string.IsNullOrWhiteSpace(_lastDownloadFolder) && Directory.Exists(_lastDownloadFolder))
+                Process.Start(new ProcessStartInfo("explorer.exe", _lastDownloadFolder) { UseShellExecute = true });
+        }
+
         private void HighlightRows()
         {
             int days = (int)numHighlightDays.Value;
@@ -531,7 +562,7 @@ namespace ADO_Tools_WinUI.Pages
 
                 // Set sensible default widths
                 if (fieldRef == "System.Id")
-                    col.Width = new DataGridLength(70);
+                    col.Width = new DataGridLength(80);
                 else if (fieldRef == "System.Title")
                     col.Width = new DataGridLength(1, DataGridLengthUnitType.Star);
                 else if (fieldRef == "System.State" || fieldRef == "System.CreatedDate" || fieldRef == "System.ChangedDate")
@@ -549,8 +580,7 @@ namespace ADO_Tools_WinUI.Pages
             }
         }
 
-        // ?? Event Handlers ??????????????????????????????????????????????
-
+        // Event Handlers
         private async void BtnConnect_Click(object sender, RoutedEventArgs e)
         {
             string project = txtProjectName.Text.Trim();
@@ -585,14 +615,16 @@ namespace ADO_Tools_WinUI.Pages
                 btnUpdateIndex.IsEnabled = true;
                 lblConnectionStatus.Text = "Connected";
             }
+            catch (HttpRequestException ex)
+            {
+                _tfsRest = null;
+                ShowMessage($"Could not reach the server. Check your internet connection or verify the organization URL.\n\nDetails: {ex.Message}", "Connection Error");
+                lblConnectionStatus.Text = "No connection";
+            }
             catch (Exception ex)
             {
+                _tfsRest = null;
                 ShowMessage("Failed to connect or load queries: " + ex.Message, "Error");
-                btnReadItems.IsEnabled = false;
-                btnDownloadSelected.IsEnabled = false;
-                btnDownloadSingle.IsEnabled = false;
-                btnFindSimilar.IsEnabled = false;
-                btnUpdateIndex.IsEnabled = false;
                 lblConnectionStatus.Text = "Connection failed";
             }
 
@@ -749,9 +781,12 @@ namespace ADO_Tools_WinUI.Pages
             btnDownloadSelected.IsEnabled = false;
 
             int failedAttachments = 0;
+            string? firstDownloadPath = null;
 
             try
             {
+                btnOpenDownloadFolder.Visibility = Visibility.Collapsed;
+
                 foreach (var row in selected)
                 {
                     var workItem = _workItemList.FirstOrDefault(w => w.Id == row.Id);
@@ -765,7 +800,7 @@ namespace ADO_Tools_WinUI.Pages
                         }
                         catch (Exception ex)
                         {
-                            System.Diagnostics.Debug.WriteLine($"Failed to fetch work item #{row.Id}: {ex.Message}");
+                            Debug.WriteLine($"Failed to fetch work item #{row.Id}: {ex.Message}");
                         }
                     }
 
@@ -776,6 +811,7 @@ namespace ADO_Tools_WinUI.Pages
                     lblSize.Text = $"{workItem.Attachments.Count} Attachment(s): {sizeText}";
 
                     string path = CreateFolder(ReadTopFolder(), workItem.Id.ToString()) + Path.DirectorySeparatorChar;
+                    firstDownloadPath ??= path;
 
                     string htmlPath = Path.Combine(path, RemoveIllegalCharacters(workItem.Title ?? "") + ".html");
                     string url = workItem.HtmlUrl ?? "";
@@ -788,7 +824,7 @@ namespace ADO_Tools_WinUI.Pages
                         catch (Exception ex)
                         {
                             failedAttachments++;
-                            System.Diagnostics.Debug.WriteLine($"Attachment download failed: {ex.Message}");
+                            Debug.WriteLine($"Attachment download failed: {ex.Message}");
                         }
                     }
 
@@ -799,6 +835,7 @@ namespace ADO_Tools_WinUI.Pages
                     ? $"Download Complete ({failedAttachments} attachment(s) failed)"
                     : "Download Complete";
                 lblSize.Text = "";
+                ShowDownloadFolderLink(firstDownloadPath);
             }
             catch (Exception ex)
             {
@@ -821,6 +858,7 @@ namespace ADO_Tools_WinUI.Pages
 
             progressBar.IsIndeterminate = true;
             progressBar.Visibility = Visibility.Visible;
+            btnOpenDownloadFolder.Visibility = Visibility.Collapsed;
 
             try
             {
@@ -858,7 +896,7 @@ namespace ADO_Tools_WinUI.Pages
                     catch (Exception ex)
                     {
                         failedAttachments++;
-                        System.Diagnostics.Debug.WriteLine($"Attachment download failed: {ex.Message}");
+                        Debug.WriteLine($"Attachment download failed: {ex.Message}");
                     }
                 }
 
@@ -866,6 +904,7 @@ namespace ADO_Tools_WinUI.Pages
                     ? $"Download Complete ({failedAttachments} attachment(s) failed)"
                     : "Download Complete";
                 lblSize.Text = "";
+                ShowDownloadFolderLink(path);
             }
             catch (Exception ex)
             {
@@ -908,6 +947,9 @@ namespace ADO_Tools_WinUI.Pages
                 ShowMessage("Enter a work item ID or select one from the grid.", "No Item Selected");
                 return;
             }
+
+            // Switch to the Search tab so it's visually clear results come from the index
+            pivotMode.SelectedIndex = 1;
 
             ShowProgress();
             btnFindSimilar.IsEnabled = false;

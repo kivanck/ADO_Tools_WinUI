@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading;
 using System.Threading.Tasks;
@@ -31,6 +32,12 @@ namespace ADO_Tools_WinUI.Pages
 
         // Cancellation token source for stopping in-progress downloads
         private CancellationTokenSource? _downloadCts;
+
+        // P/Invoke to prevent the system from sleeping during downloads
+        [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        private static extern uint SetThreadExecutionState(uint esFlags);
+        private const uint ES_CONTINUOUS = 0x80000000;
+        private const uint ES_SYSTEM_REQUIRED = 0x00000001;
 
 
         /// <summary>Initializes the page, binds the log list, and subscribes to the Loaded event.</summary>
@@ -502,6 +509,9 @@ namespace ADO_Tools_WinUI.Pages
             btnStopDownload.IsEnabled = true;
             ShowProgress();
 
+            // Keep the system awake while downloading / installing
+            SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED);
+
             var installFunctions = CreateInstallFunctionsWithLogging();
             var downloadService = CreateBuildDownloadService();
 
@@ -597,6 +607,9 @@ namespace ADO_Tools_WinUI.Pages
             }
             finally
             {
+                // Allow the system to sleep again
+                SetThreadExecutionState(ES_CONTINUOUS);
+
                 btnUpdate.IsEnabled = true;
                 btnStopDownload.Visibility = Visibility.Collapsed;
                 HideProgress();
