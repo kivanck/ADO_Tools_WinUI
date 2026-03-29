@@ -37,6 +37,7 @@ namespace ADO_Tools_WinUI.Pages
         private string _lastCompareSource = "";
         private List<string> _queryColumns = [];
         private bool _initialized;
+        private List<WorkItemRow> _allRows = new();
 
         // Friendly display names for ADO field reference names
         private static readonly Dictionary<string, string> FieldDisplayNames = new(StringComparer.OrdinalIgnoreCase)
@@ -426,9 +427,12 @@ namespace ADO_Tools_WinUI.Pages
 
         private void HighlightRows()
         {
+            if (double.IsNaN(numHighlightDays.Value)) return;
             int days = (int)numHighlightDays.Value;
+            if (days <= 0) return;
+
             var now = DateTime.Now;
-            var highlightBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(40, 0, 120, 215));
+            var highlightBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(140, 0, 120, 215));
 
             foreach (var row in _rows)
             {
@@ -439,6 +443,14 @@ namespace ADO_Tools_WinUI.Pages
             // Force DataGrid to re-read the collection
             dataGridWorkItems.ItemsSource = null;
             dataGridWorkItems.ItemsSource = _rows;
+        }
+
+        private void DataGridWorkItems_LoadingRow(object sender, DataGridRowEventArgs e)
+        {
+            if (e.Row.DataContext is WorkItemRow row && row.RowBackground != null)
+                e.Row.Background = row.RowBackground;
+            else
+                e.Row.Background = null;
         }
 
         private List<WorkItemRow> BuildRows(List<WorkItemDto> items)
@@ -588,7 +600,12 @@ namespace ADO_Tools_WinUI.Pages
                 {
                     Header = header,
                     Tag = fieldRef,
-                    Binding = new Binding { Path = new PropertyPath(bindingPath) },
+                    Binding = new Binding
+                    {
+                        Path = new PropertyPath(bindingPath),
+                        FallbackValue = "",
+                        TargetNullValue = ""
+                    },
                     CanUserResize = true,
                     CanUserSort = true,
                 };
@@ -804,8 +821,7 @@ namespace ADO_Tools_WinUI.Pages
             }
             else
             {
-                foreach (var row in BuildRows(_workItemList))
-                    _rows.Add(row);
+                SetRows(BuildRows(_workItemList));
 
                 lblItemCount.Text = $"{_workItemList.Count} items";
                 HighlightRows();
@@ -1082,17 +1098,17 @@ namespace ADO_Tools_WinUI.Pages
 
                 // Display results
                 ApplyDynamicColumns([]);
-                _rows.Clear();
 
                 // Source item first with [Source] tag
                 var sourceRow = BuildRow(workItem);
                 sourceRow.Title = $"[Source] {sourceRow.Title}";
                 sourceRow.FieldValues["System.Title"] = sourceRow.Title;
                 sourceRow.RowBackground = new SolidColorBrush(Windows.UI.Color.FromArgb(40, 202, 80, 16));
-                _rows.Add(sourceRow);
 
+                var resultRows = new List<WorkItemRow> { sourceRow };
                 foreach (var (entry, score) in merged)
-                    _rows.Add(BuildRowFromCacheEntry(entry, $"[{score:P0}]"));
+                    resultRows.Add(BuildRowFromCacheEntry(entry, $"[{score:P0}]"));
+                SetRows(resultRows);
 
                 _listMode = ListMode.Compare;
                 _lastCompareSource = $"#{workItem.Id} {workItem.Title}";
@@ -1307,6 +1323,130 @@ namespace ADO_Tools_WinUI.Pages
         private void ColumnPickerFlyout_Opening(object sender, object e)
         {
             PopulateColumnPicker();
+        }
+
+        // ── Row Filters ──────────────────────────────────────────────────
+
+        private const string FilterAll = "(All)";
+        private bool _suppressFilterEvents;
+
+        private void PopulateFilters()
+        {
+            _suppressFilterEvents = true;
+
+            PopulateFilterCombo(cmbFilterType, "System.WorkItemType");
+            PopulateFilterCombo(cmbFilterState, "System.State");
+            PopulateFilterCombo(cmbFilterAreaPath, "System.AreaPath");
+            PopulateFilterCombo(cmbFilterPriority, "Microsoft.VSTS.Common.Priority");
+            PopulateFilterCombo(cmbFilterAssignedTo, "System.AssignedTo");
+
+            _suppressFilterEvents = false;
+            UpdateFilterBadge();
+        }
+
+        private void PopulateFilterCombo(ComboBox combo, string fieldRef)
+        {
+            var values = _allRows
+                .Select(r => r.FieldValues.TryGetValue(fieldRef, out var v) ? v : "")
+                .Where(v => !string.IsNullOrEmpty(v))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(v => v, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            combo.Items.Clear();
+            combo.Items.Add(FilterAll);
+            foreach (var v in values)
+                combo.Items.Add(v);
+            combo.SelectedIndex = 0;
+
+            // Hide the combo if there's only 1 or 0 unique values (nothing to filter)
+            combo.Visibility = values.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void FilterCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_suppressFilterEvents) return;
+            ApplyFilters();
+        }
+
+        private void BtnClearFilters_Click(object sender, RoutedEventArgs e)
+        {
+            _suppressFilterEvents = true;
+            cmbFilterType.SelectedIndex = 0;
+            cmbFilterState.SelectedIndex = 0;
+            cmbFilterAreaPath.SelectedIndex = 0;
+            cmbFilterPriority.SelectedIndex = 0;
+            cmbFilterAssignedTo.SelectedIndex = 0;
+            _suppressFilterEvents = false;
+            ApplyFilters();
+        }
+
+        private void ApplyFilters()
+        {
+            var filters = new List<(string FieldRef, string Value)>();
+
+            void AddIf(ComboBox combo, string fieldRef)
+            {
+                if (combo.SelectedItem is string val && val != FilterAll)
+                    filters.Add((fieldRef, val));
+            }
+
+            AddIf(cmbFilterType, "System.WorkItemType");
+            AddIf(cmbFilterState, "System.State");
+            AddIf(cmbFilterAreaPath, "System.AreaPath");
+            AddIf(cmbFilterPriority, "Microsoft.VSTS.Common.Priority");
+            AddIf(cmbFilterAssignedTo, "System.AssignedTo");
+
+            var filtered = _allRows.AsEnumerable();
+            foreach (var (fieldRef, value) in filters)
+            {
+                filtered = filtered.Where(r =>
+                    r.FieldValues.TryGetValue(fieldRef, out var v) &&
+                    string.Equals(v, value, StringComparison.OrdinalIgnoreCase));
+            }
+
+            _rows.Clear();
+            foreach (var row in filtered)
+                _rows.Add(row);
+
+            lblItemCount.Text = filters.Count > 0
+                ? $"{_rows.Count}/{_allRows.Count} items (filtered)"
+                : $"{_allRows.Count} items";
+
+            UpdateFilterBadge();
+        }
+
+        private void UpdateFilterBadge()
+        {
+            int activeCount = 0;
+            if (cmbFilterType.SelectedItem is string t && t != FilterAll) activeCount++;
+            if (cmbFilterState.SelectedItem is string s && s != FilterAll) activeCount++;
+            if (cmbFilterAreaPath.SelectedItem is string a && a != FilterAll) activeCount++;
+            if (cmbFilterPriority.SelectedItem is string p && p != FilterAll) activeCount++;
+            if (cmbFilterAssignedTo.SelectedItem is string at && at != FilterAll) activeCount++;
+
+            if (activeCount > 0)
+            {
+                lblFilterBadge.Text = $"({activeCount})";
+                lblFilterBadge.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                lblFilterBadge.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        /// <summary>
+        /// Replaces all rows and refreshes filters. Call this instead of directly modifying _rows
+        /// when loading new data.
+        /// </summary>
+        private void SetRows(List<WorkItemRow> rows)
+        {
+            _allRows = rows;
+            _rows.Clear();
+            foreach (var row in rows)
+                _rows.Add(row);
+            PopulateFilters();
         }
 
         /// <summary>
@@ -1584,9 +1724,8 @@ namespace ADO_Tools_WinUI.Pages
 
                 ApplyDynamicColumns([]);
 
-                _rows.Clear();
-                foreach (var (entry, score) in merged)
-                    _rows.Add(BuildRowFromCacheEntry(entry, $"[{score:P0}]"));
+                var resultRows = merged.Select(m => BuildRowFromCacheEntry(m.Entry, $"[{m.Score:P0}]")).ToList();
+                SetRows(resultRows);
 
                 _listMode = ListMode.SearchBacklog;
                 _lastSearchQuery = query;
@@ -1627,9 +1766,7 @@ namespace ADO_Tools_WinUI.Pages
                 // Reset to default columns for backlog search
                 ApplyDynamicColumns([]);
 
-                _rows.Clear();
-                foreach (var r in results)
-                    _rows.Add(BuildRowFromCacheEntry(r.CacheEntry, $"[{r.Score:P0}]"));
+                SetRows(results.Select(r => BuildRowFromCacheEntry(r.CacheEntry, $"[{r.Score:P0}]")).ToList());
 
                 _listMode = ListMode.SearchBacklog;
                 _lastSearchQuery = query;
@@ -1670,9 +1807,7 @@ namespace ADO_Tools_WinUI.Pages
                 // Reset to default columns for backlog search
                 ApplyDynamicColumns([]);
 
-                _rows.Clear();
-                foreach (var r in results)
-                    _rows.Add(BuildRowFromCacheEntry(r.CacheEntry, $"[{r.Score:F1}]"));
+                SetRows(results.Select(r => BuildRowFromCacheEntry(r.CacheEntry, $"[{r.Score:F1}]")).ToList());
 
                 _listMode = ListMode.SearchBacklog;
                 _lastSearchQuery = query;
@@ -1701,9 +1836,7 @@ namespace ADO_Tools_WinUI.Pages
             // Restore query columns when going back to query results
             ApplyDynamicColumns(_queryColumns);
 
-            _rows.Clear();
-            foreach (var row in BuildRows(_workItemList))
-                _rows.Add(row);
+            SetRows(BuildRows(_workItemList));
 
             _listMode = ListMode.Query;
             lblItemCount.Text = $"{_workItemList.Count} items";
@@ -1748,9 +1881,7 @@ namespace ADO_Tools_WinUI.Pages
                 // Keep query columns for search-within-query results
                 ApplyDynamicColumns(_queryColumns);
 
-                _rows.Clear();
-                foreach (var r in results)
-                    _rows.Add(BuildRowFromCacheEntry(r.CacheEntry, $"[{r.Score:F1}]"));
+                SetRows(results.Select(r => BuildRowFromCacheEntry(r.CacheEntry, $"[{r.Score:F1}]")).ToList());
 
                 _listMode = ListMode.SearchQuery;
                 _lastSearchQuery = query;
@@ -1779,9 +1910,7 @@ namespace ADO_Tools_WinUI.Pages
 
             ApplyDynamicColumns(_queryColumns);
 
-            _rows.Clear();
-            foreach (var row in BuildRows(_workItemList))
-                _rows.Add(row);
+            SetRows(BuildRows(_workItemList));
 
             _listMode = ListMode.Query;
             lblItemCount.Text = $"{_workItemList.Count} items";

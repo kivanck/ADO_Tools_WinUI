@@ -383,6 +383,7 @@
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
                         <!--  Icon + title  -->
@@ -416,11 +417,67 @@
                             VerticalAlignment="Center"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
 
+                        <!--  Filter flyout button  -->
                         <Button
-                            x:Name="btnColumnPicker"
+                            x:Name="btnFilterPicker"
                             Grid.Column="4"
                             Height="28"
                             Margin="8,0,0,0"
+                            VerticalAlignment="Center"
+                            Padding="6,4"
+                            ToolTipService.ToolTip="Filter rows">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <FontIcon FontSize="12" Glyph="&#xE71C;" />
+                                <TextBlock
+                                    x:Name="lblFilterBadge"
+                                    FontSize="11"
+                                    Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                    Visibility="Collapsed" />
+                            </StackPanel>
+                            <Button.Flyout>
+                                <Flyout x:Name="filterPickerFlyout" Placement="BottomEdgeAlignedRight">
+                                    <StackPanel MinWidth="220" Spacing="8">
+                                        <Button
+                                            x:Name="btnClearFilters"
+                                            HorizontalAlignment="Stretch"
+                                            Click="BtnClearFilters_Click"
+                                            Content="Clear Filters" />
+                                        <ComboBox
+                                            x:Name="cmbFilterType"
+                                            HorizontalAlignment="Stretch"
+                                            Header="Type"
+                                            SelectionChanged="FilterCombo_SelectionChanged" />
+                                        <ComboBox
+                                            x:Name="cmbFilterState"
+                                            HorizontalAlignment="Stretch"
+                                            Header="State"
+                                            SelectionChanged="FilterCombo_SelectionChanged" />
+                                        <ComboBox
+                                            x:Name="cmbFilterAreaPath"
+                                            HorizontalAlignment="Stretch"
+                                            Header="Area"
+                                            SelectionChanged="FilterCombo_SelectionChanged" />
+                                        <ComboBox
+                                            x:Name="cmbFilterPriority"
+                                            HorizontalAlignment="Stretch"
+                                            Header="Priority"
+                                            SelectionChanged="FilterCombo_SelectionChanged" />
+                                        <ComboBox
+                                            x:Name="cmbFilterAssignedTo"
+                                            HorizontalAlignment="Stretch"
+                                            Header="Assigned To"
+                                            SelectionChanged="FilterCombo_SelectionChanged" />
+                                    </StackPanel>
+                                </Flyout>
+                            </Button.Flyout>
+                        </Button>
+
+                        <!--  Column picker button  -->
+                        <Button
+                            x:Name="btnColumnPicker"
+                            Grid.Column="5"
+                            Height="28"
+                            Margin="4,0,0,0"
                             HorizontalAlignment="Right"
                             VerticalAlignment="Center"
                             Padding="6,4"
@@ -448,7 +505,7 @@
                     </Grid>
                 </Border>
 
-                <!--  Dataa Grid for work items  -->
+                <!--  Data Grid for work items  -->
                 <controls:DataGrid
                     x:Name="dataGridWorkItems"
                     Grid.Row="1"
@@ -461,6 +518,7 @@
                     DoubleTapped="DataGridWorkItems_DoubleTapped"
                     GridLinesVisibility="Horizontal"
                     IsReadOnly="True"
+                    LoadingRow="DataGridWorkItems_LoadingRow"
                     SelectionMode="Extended"
                     SelectionChanged="DataGridWorkItems_SelectionChanged"
                     Sorting="DataGridWorkItems_Sorting" />
