@@ -14,6 +14,7 @@ namespace ADO_Tools_WinUI.Pages
     public sealed partial class SettingsPage : Page
     {
         public event Action? IndexRebuilt;
+        private bool _cacheStatusLoaded;
 
         public SettingsPage()
         {
@@ -37,7 +38,11 @@ namespace ADO_Tools_WinUI.Pages
 
             txtSearchResultColumns.Text = string.Join(", ", s.SearchResultColumns);
 
-            UpdateSettingsCacheStatusAsync();
+            if (!_cacheStatusLoaded)
+            {
+                _cacheStatusLoaded = true;
+                UpdateSettingsCacheStatusAsync();
+            }
         }
 
         public void SaveSettings()

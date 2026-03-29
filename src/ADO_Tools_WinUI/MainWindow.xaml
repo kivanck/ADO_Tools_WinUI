@@ -96,7 +96,10 @@
                 <pages:SoftwareDownloadPage />
             </TabViewItem>
 
-
+            <!--  Settings tab — header hidden, navigated via gear button  -->
+            <TabViewItem x:Name="settingsTab" IsClosable="False" Visibility="Collapsed">
+                <pages:SettingsPage x:Name="settingsPage" />
+            </TabViewItem>
 
         </TabView>
     </Grid>

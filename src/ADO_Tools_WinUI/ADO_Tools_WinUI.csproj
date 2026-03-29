@@ -60,9 +60,6 @@
     <Page Update="MainWindow.xaml">
       <Generator>MSBuild:Compile</Generator>
     </Page>
-    <Page Update="Pages\SettingsPage.xaml">
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
     <Page Update="Pages\SoftwareDownloadPage.xaml">
       <Generator>MSBuild:Compile</Generator>
     </Page>
@@ -74,7 +71,7 @@
     <Folder Include="UI\" />
   </ItemGroup>
   <ItemGroup>
-    <None Update="SettingsWindow.xaml">
+    <None Update="Pages\SettingsPage.xaml">
       <Generator>MSBuild:Compile</Generator>
     </None>
   </ItemGroup>

@@ -6,144 +6,293 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,16,0">
-        <StackPanel Spacing="8" MaxWidth="600" HorizontalAlignment="Left">
+    <ScrollViewer Padding="24,20,24,20" VerticalScrollBarVisibility="Auto">
+        <Grid
+            VerticalAlignment="Top"
+            ColumnSpacing="24"
+            RowSpacing="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
 
-            <!-- Connection settings card -->
-            <TextBlock Text="Azure DevOps Connection"
-                       Style="{StaticResource SubtitleTextBlockStyle}"
-                       Margin="0,0,0,4" />
+            <!--  ROW 0, LEFT: Search Index  -->
+            <Border
+                Grid.Row="0"
+                Grid.Column="0"
+                Padding="20,16"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="8">
+                <StackPanel Spacing="12">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Border
+                            Width="28"
+                            Height="28"
+                            Background="#6B69D6"
+                            CornerRadius="6">
+                            <FontIcon
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                FontSize="14"
+                                Foreground="White"
+                                Glyph="&#xE721;" />
+                        </Border>
+                        <TextBlock
+                            VerticalAlignment="Center"
+                            Style="{StaticResource BodyStrongTextBlockStyle}"
+                            Text="Search Index" />
+                    </StackPanel>
 
-            <Grid ColumnSpacing="16" RowSpacing="12">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
+                    <TextBlock
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="Configure the semantic search index. Update Index fetches new/changed items incrementally. Force Rebuild deletes the cache and re-indexes everything."
+                        TextWrapping="Wrap" />
 
-                <TextBox Grid.Row="0" Grid.Column="0"
-                         x:Name="txtOrganization"
-                         Header="Organisation"
-                         PlaceholderText="e.g. myorg" />
+                    <TextBox
+                        x:Name="txtSearchAreaPath"
+                        Header="Iteration Path"
+                        PlaceholderText="e.g. Civil\OpenCivil Designer\Backlog" />
 
-                <TextBox Grid.Row="0" Grid.Column="1"
-                         x:Name="txtProject"
-                         Header="Default Project"
-                         PlaceholderText="e.g. Civil" />
+                    <CalendarDatePicker
+                        x:Name="dpCutoffDate"
+                        HorizontalAlignment="Stretch"
+                        DateFormat="{}{year.full}-{month.integer(2)}-{day.integer(2)}"
+                        Header="Index Cutoff Date (items created after this date)"
+                        PlaceholderText="Select cutoff date" />
 
-                <PasswordBox Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
-                             x:Name="txtPAT"
-                             Header="Personal Access Token (PAT)"
-                             PlaceholderText="Paste your PAT here" />
+                    <TextBlock
+                        x:Name="lblSettingsCacheStatus"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}" />
 
-                <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2"
-                            Orientation="Horizontal" Spacing="12">
-                    <Button x:Name="btnValidate"
-                            Content="Validate Connection"
-                            Style="{StaticResource AccentButtonStyle}"
-                            Click="BtnValidate_Click" />
-                    <InfoBar x:Name="ValidationStatus"
-                             IsOpen="False"
-                             IsClosable="False"
-                             Severity="Informational" />
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <Button
+                            x:Name="btnSettingsBuildIndex"
+                            Click="BtnSettingsBuildIndex_Click"
+                            Style="{StaticResource AccentButtonStyle}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon FontSize="14" Glyph="&#xEBD3;" />
+                                <TextBlock Text="Update Index" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="btnSettingsForceRebuild" Click="BtnSettingsForceRebuild_Click">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon FontSize="14" Glyph="&#xE72C;" />
+                                <TextBlock Text="Force Rebuild" />
+                            </StackPanel>
+                        </Button>
+                        <ProgressRing
+                            x:Name="indexProgressRing"
+                            Width="24"
+                            Height="24"
+                            VerticalAlignment="Center"
+                            IsActive="False" />
+                    </StackPanel>
                 </StackPanel>
-            </Grid>
+            </Border>
 
-            <MenuFlyoutSeparator Margin="0,16" />
-
-            <!-- Paths settings card -->
-            <TextBlock Text="Paths"
-                       Style="{StaticResource SubtitleTextBlockStyle}"
-                       Margin="0,0,0,4" />
-
-            <TextBox x:Name="txtRootFolder"
-                     Header="Work Items Download Folder"
-                     PlaceholderText="e.g. D:\ADO_Items" />
-
-            <TextBox x:Name="txtDownloadFolder"
-                     Header="Software Download Folder"
-                     PlaceholderText="e.g. D:\Downloads\Builds" />
-
-            <MenuFlyoutSeparator Margin="0,16" />
-
-            <!-- Search Index settings card -->
-            <TextBlock Text="Search Index"
-                       Style="{StaticResource SubtitleTextBlockStyle}"
-                       Margin="0,0,0,4" />
-            <TextBlock Text="Configure the semantic search index. Build Index fetches new/changed items incrementally. Force Rebuild deletes the cache and re-indexes everything."
-                       TextWrapping="Wrap"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                       Margin="0,0,0,8" />
-
-            <TextBox x:Name="txtSearchAreaPath"
-                     Header="Iteration Path"
-                     PlaceholderText="e.g. Civil\OpenCivil Designer\Backlog" />
-
-            <CalendarDatePicker x:Name="dpCutoffDate"
-                                Header="Index Cutoff Date (items created after this date)"
-                                PlaceholderText="Select cutoff date"
-                                DateFormat="{}{year.full}-{month.integer(2)}-{day.integer(2)}"
-                                HorizontalAlignment="Stretch" />
-
-            <TextBlock x:Name="lblSettingsCacheStatus"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                       Style="{StaticResource CaptionTextBlockStyle}"
-                       Margin="0,4,0,0" />
-
-            <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,8,0,0">
-                <Button x:Name="btnSettingsBuildIndex"
-                        Click="BtnSettingsBuildIndex_Click"
-                        Style="{StaticResource AccentButtonStyle}">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <FontIcon FontSize="14" Glyph="&#xEBD3;" />
-                        <TextBlock Text="Update Index" />
+            <!--  ROW 0, RIGHT: Connection  -->
+            <Border
+                Grid.Row="0"
+                Grid.Column="1"
+                Padding="20,16"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="8">
+                <StackPanel Spacing="12">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Border
+                            Width="28"
+                            Height="28"
+                            Background="{ThemeResource SystemAccentColorDark1}"
+                            CornerRadius="6">
+                            <FontIcon
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                FontSize="14"
+                                Foreground="White"
+                                Glyph="&#xE774;" />
+                        </Border>
+                        <TextBlock
+                            VerticalAlignment="Center"
+                            Style="{StaticResource BodyStrongTextBlockStyle}"
+                            Text="Azure DevOps Connection" />
                     </StackPanel>
-                </Button>
-                <Button x:Name="btnSettingsForceRebuild"
-                        Click="BtnSettingsForceRebuild_Click">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <FontIcon FontSize="14" Glyph="&#xE72C;" />
-                        <TextBlock Text="Force Rebuild" />
+
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox
+                            x:Name="txtOrganization"
+                            Grid.Column="0"
+                            Header="Organisation"
+                            PlaceholderText="e.g. myorg" />
+                        <TextBox
+                            x:Name="txtProject"
+                            Grid.Column="1"
+                            Header="Default Project"
+                            PlaceholderText="e.g. Civil" />
+                    </Grid>
+
+                    <PasswordBox
+                        x:Name="txtPAT"
+                        Header="Personal Access Token (PAT)"
+                        PlaceholderText="Paste your PAT here" />
+
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <Button
+                            x:Name="btnValidate"
+                            Click="BtnValidate_Click"
+                            Content="Validate Connection"
+                            Style="{StaticResource AccentButtonStyle}" />
+                        <InfoBar
+                            x:Name="ValidationStatus"
+                            IsClosable="False"
+                            IsOpen="False"
+                            Severity="Informational" />
                     </StackPanel>
-                </Button>
-                <ProgressRing x:Name="indexProgressRing"
-                              IsActive="False"
-                              Width="24" Height="24"
-                              VerticalAlignment="Center" />
+                </StackPanel>
+            </Border>
+
+            <!--  ROW 1, LEFT: Search Result Columns (stretches to match right)  -->
+            <Border
+                Grid.Row="1"
+                Grid.Column="0"
+                Padding="20,16"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="8">
+                <Grid RowSpacing="12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="10">
+                        <Border
+                            Width="28"
+                            Height="28"
+                            Background="#0078D4"
+                            CornerRadius="6">
+                            <FontIcon
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                FontSize="14"
+                                Foreground="White"
+                                Glyph="&#xE9F5;" />
+                        </Border>
+                        <TextBlock
+                            VerticalAlignment="Center"
+                            Style="{StaticResource BodyStrongTextBlockStyle}"
+                            Text="Search Result Columns" />
+                    </StackPanel>
+
+                    <TextBlock
+                        Grid.Row="1"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="Comma-separated ADO field reference names shown when displaying search and find-similar results. Use names like System.Id, System.Title, System.AreaPath, Microsoft.VSTS.Common.Priority, etc."
+                        TextWrapping="Wrap" />
+
+                    <TextBox
+                        x:Name="txtSearchResultColumns"
+                        Grid.Row="2"
+                        AcceptsReturn="True"
+                        Header="Columns"
+                        PlaceholderText="System.Id, System.Title, System.State, System.AreaPath, ..."
+                        TextWrapping="Wrap"
+                        ScrollViewer.VerticalScrollBarVisibility="Auto" />
+                </Grid>
+            </Border>
+
+            <!--  ROW 1, RIGHT: Paths + About stacked  -->
+            <StackPanel
+                Grid.Row="1"
+                Grid.Column="1"
+                Spacing="12">
+
+                <!--  Paths Card  -->
+                <Border
+                    Padding="20,16"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8">
+                    <StackPanel Spacing="12">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Border
+                                Width="28"
+                                Height="28"
+                                Background="#107C10"
+                                CornerRadius="6">
+                                <FontIcon
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    FontSize="14"
+                                    Foreground="White"
+                                    Glyph="&#xED25;" />
+                            </Border>
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                Style="{StaticResource BodyStrongTextBlockStyle}"
+                                Text="Download Paths" />
+                        </StackPanel>
+
+                        <TextBox
+                            x:Name="txtRootFolder"
+                            Header="Work Items Download Folder"
+                            PlaceholderText="e.g. D:\ADO_Items" />
+                        <TextBox
+                            x:Name="txtDownloadFolder"
+                            Header="Software Download Folder"
+                            PlaceholderText="e.g. D:\Downloads\Builds" />
+                    </StackPanel>
+                </Border>
+
+                <!--  About Card  -->
+                <Border
+                    Padding="20,16"
+                    Background="#0DFFFFFF"
+                    BorderBrush="{ThemeResource SystemAccentColorDark1}"
+                    BorderThickness="1"
+                    CornerRadius="8">
+                    <StackPanel Spacing="8">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Border
+                                Width="28"
+                                Height="28"
+                                Background="{ThemeResource SystemAccentColorDark1}"
+                                CornerRadius="6">
+                                <FontIcon
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    FontSize="14"
+                                    Foreground="White"
+                                    Glyph="&#xE946;" />
+                            </Border>
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                Style="{StaticResource BodyStrongTextBlockStyle}"
+                                Text="About" />
+                        </StackPanel>
+                        <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="ADO Tools — Azure DevOps Productivity Suite" />
+                        <TextBlock
+                            FontSize="12"
+                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                            Text="kivanc.karakas@bentley.com" />
+                    </StackPanel>
+                </Border>
             </StackPanel>
-
-            <MenuFlyoutSeparator Margin="0,16" />
-
-            <!-- Search Result Columns -->
-            <TextBlock Text="Search Result Columns"
-                       Style="{StaticResource SubtitleTextBlockStyle}"
-                       Margin="0,0,0,4" />
-            <TextBlock Text="Comma-separated ADO field reference names shown when displaying search and find-similar results. Use names like System.Id, System.Title, System.AreaPath, Microsoft.VSTS.Common.Priority, etc."
-                       TextWrapping="Wrap"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                       Margin="0,0,0,8" />
-            <TextBox x:Name="txtSearchResultColumns"
-                     Header="Columns"
-                     TextWrapping="Wrap"
-                     AcceptsReturn="False"
-                     PlaceholderText="System.Id, System.Title, System.State, System.AreaPath, ..." />
-
-            <MenuFlyoutSeparator Margin="0,16" />
-
-            <!-- About -->
-            <TextBlock Text="About"
-                       Style="{StaticResource SubtitleTextBlockStyle}"
-                       Margin="0,0,0,4" />
-            <TextBlock Text="Tools for Azure DevOps"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-            <TextBlock Text="kivanc.karakas@bentley.com"
-                       Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                       FontSize="12" />
-
-            </StackPanel>
+        </Grid>
     </ScrollViewer>
 </Page>

@@ -9,7 +9,7 @@ namespace ADO_Tools_WinUI
 {
     public sealed partial class MainWindow : Window
     {
-        private SettingsWindow? _settingsWindow;
+        private int _previousTabIndex;
 
         public MainWindow()
         {
@@ -25,6 +25,17 @@ namespace ADO_Tools_WinUI
             // Resize using DPI-aware logical size so it looks correct at any scaling
             ResizeWindowToLogicalSize(1280, 970);
 
+            // Wire IndexRebuilt so Work Items page reloads the search cache
+            settingsPage.IndexRebuilt += () =>
+            {
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    if (FindWorkItemsPage() is WorkItemsPage page)
+                        page.ReloadSearchCache();
+                });
+            };
+
+            MainTabView.SelectionChanged += MainTabView_SelectionChanged;
             Closed += MainWindow_Closed;
         }
 
@@ -42,26 +53,36 @@ namespace ADO_Tools_WinUI
 
         private void BtnSettings_Click(object sender, RoutedEventArgs e)
         {
-            // If the settings window is already open, bring it to front
-            if (_settingsWindow != null)
+            if (MainTabView.SelectedItem == settingsTab)
             {
-                _settingsWindow.Activate();
-                return;
+                // Already on settings — go back to previous tab
+                MainTabView.SelectedIndex = _previousTabIndex;
+            }
+            else
+            {
+                // Switch to settings tab
+                MainTabView.SelectedItem = settingsTab;
+            }
+        }
+
+        private void MainTabView_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            bool goingToSettings = MainTabView.SelectedItem == settingsTab;
+            bool leavingSettings = e.RemovedItems.Count > 0 && e.RemovedItems[0] == settingsTab;
+
+            if (goingToSettings)
+            {
+                // Remember where we came from so the gear button can toggle back
+                if (e.RemovedItems.Count > 0 && e.RemovedItems[0] is TabViewItem prev)
+                    _previousTabIndex = MainTabView.TabItems.IndexOf(prev);
+
+                settingsPage.LoadSettings();
             }
 
-            _settingsWindow = new SettingsWindow();
-
-            _settingsWindow.WireIndexRebuilt(() =>
+            if (leavingSettings)
             {
-                DispatcherQueue.TryEnqueue(() =>
-                {
-                    if (FindWorkItemsPage() is WorkItemsPage page)
-                        page.ReloadSearchCache();
-                });
-            });
-
-            _settingsWindow.Closed += (_, _) => _settingsWindow = null;
-            _settingsWindow.Activate();
+                settingsPage.SaveSettings();
+            }
         }
 
         private WorkItemsPage? FindWorkItemsPage()
@@ -76,7 +97,10 @@ namespace ADO_Tools_WinUI
 
         private void MainWindow_Closed(object sender, WindowEventArgs args)
         {
-            _settingsWindow?.Close();
+            // Save settings if we're closing while on the settings tab
+            if (MainTabView.SelectedItem == settingsTab)
+                settingsPage.SaveSettings();
+
             AppSettings.Default.Save();
         }
 
