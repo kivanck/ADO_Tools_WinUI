@@ -1,6 +1,6 @@
-# ADO Tools — Azure DevOps Productivity Suite
+ï»¿# ADO Tools - Azure DevOps Productivity Suite
 
-A **WinUI 3** desktop application for Windows that streamlines common Azure DevOps workflows — browsing and downloading work items, searching backlogs with AI-powered semantic search, and downloading/installing software builds — all from a single, modern interface.
+A **WinUI 3** desktop application for Windows that streamlines common Azure DevOps workflows - browsing and downloading work items, searching backlogs with AI-powered semantic search, and downloading/installing software builds - all from a single, modern interface.
 
 ![.NET 8](https://img.shields.io/badge/.NET-8.0-blue)
 ![WinUI 3](https://img.shields.io/badge/WinUI-3-blueviolet)
@@ -61,12 +61,12 @@ The Work Items tab is the primary workspace for interacting with Azure DevOps wo
 - **Collapsible tree**: Double-clicking a query collapses the tree into a compact label showing the selected query name. Click the label to expand it again.
 
 #### Executing Queries
-- **Incremental fetching**: Queries use a smart caching strategy — only new or changed work items are fetched from the API. The system:
+- **Incremental fetching**: Queries use a smart caching strategy - only new or changed work items are fetched from the API. The system:
   1. Executes the WIQL query to get work item IDs and column definitions.
   2. Fetches lightweight `ChangedDate` values from the API.
   3. Compares against the local query cache to determine which items need a full re-fetch.
   4. Fetches only new/changed items and merges them into the cache.
-- **Progress reporting**: Both the "checking" and "fetching" phases show real-time progress (e.g., `Checking 50/200 items…`, `Fetching 12/30 items…`).
+- **Progress reporting**: Both the "checking" and "fetching" phases show real-time progress (e.g., `Checking 50/200 items-`, `Fetching 12/30 items-`).
 
 #### Dynamic Columns
 - Columns are **dynamically generated** based on the fields returned by the query or the search index.
@@ -96,7 +96,7 @@ The Work Items tab is the primary workspace for interacting with Azure DevOps wo
 #### Search (Query-Level)
 - After loading a query, a **BM25 keyword search** index is built from the cached query results.
 - The search box provides **auto-suggest** with:
-  - Recent search history (prefixed with ??).
+  - Recent search history (prefixed with a clock icon).
   - Vocabulary completions from the BM25 index.
 
 #### Search (Backlog-Level)
@@ -109,17 +109,17 @@ The Work Items tab is the primary workspace for interacting with Azure DevOps wo
 
 #### Find Similar
 - Enter a work item ID (or select one from the grid) and click **Find Similar**.
-- Uses a 3-tier lookup for the source item: current list ? embedding cache ? API.
+- Uses a 3-tier lookup for the source item: current list > embedding cache > API.
 - Runs **semantic similarity** and **BM25 keyword search** in parallel, then fuses results.
 - The source item is displayed at the top with a `[Source]` tag and orange highlight.
 - An **Exclude Done** checkbox filters out completed/closed items from results.
 
 #### Context Badge
 - A colored badge at the top of the grid indicates the current data source:
-  - ?? **Query Results** — data from an ADO query.
-  - ?? **Query Search** — keyword search within query results.
-  - ?? **Backlog Search** — semantic/keyword search of the full backlog.
-  - ?? **Compare Results** — "Find Similar" results.
+  - **Blue** - Query Results: data from an ADO query.
+  - **Green** - Query Search: keyword search within query results.
+  - **Purple** - Backlog Search: semantic/keyword search of the full backlog.
+  - **Orange** - Compare Results: "Find Similar" results.
 
 ---
 
@@ -135,7 +135,7 @@ The Software Downloads tab manages downloading and installing software builds fr
 #### Loading Builds
 - Queries Azure DevOps for available builds matching the selected pipeline definition.
 - Configurable **build count** (how many recent builds to fetch).
-- Builds are displayed in a list with **version highlighting** — the latest major version is visually distinguished.
+- Builds are displayed in a list with **version highlighting** - the latest major version is visually distinguished.
 - **Build filter**: A text box filters the build list by version string.
 
 #### Update Workflow
@@ -199,7 +199,7 @@ Both support a **Browse** button that opens a folder picker dialog.
 
 #### Cache Status
 - Shows the current cache state (e.g., `Current cache: 5,432 items indexed.`).
-- Displays progress during index building (e.g., `Embedding 150/500…`).
+- Displays progress during index building (e.g., `Embedding 150/500-`).
 
 #### About
 - Displays the application version (from MSIX package or assembly metadata).
@@ -212,42 +212,42 @@ Both support a **Browse** button that opens a folder picker dialog.
 
 ```
 src/ADO_Tools_WinUI/
-??? Assets/
-?   ??? Models/
-?   ?   ??? model.onnx          # Sentence embedding model (MiniLM)
-?   ?   ??? vocab.txt           # Tokenizer vocabulary
-?   ??? ADOToolsSquare256Pixel.ico
-??? Models/
-?   ??? AttachmentDto.cs         # Work item attachment data
-?   ??? BuildInfo.cs             # Azure DevOps build metadata
-?   ??? EmbeddingCacheEntry.cs   # Cached work item embedding + metadata
-?   ??? QueryDto.cs              # ADO query tree node
-?   ??? QueryExecutionResult.cs  # WIQL execution result (IDs + columns)
-?   ??? WiqlQueryResult.cs       # Full query result with work items
-?   ??? WorkItemDto.cs           # Work item data transfer object
-??? Pages/
-?   ??? BuildInfoViewModel.cs    # View model for build list items
-?   ??? LogEntryViewModel.cs     # View model for log entries
-?   ??? SettingsPage.xaml(.cs)   # Settings UI and logic
-?   ??? SoftwareDownloadPage.xaml(.cs) # Build download/install UI
-?   ??? WorkItemsPage.xaml(.cs)  # Work items UI and search
-??? Services/
-?   ??? AppSettings.cs           # JSON-based settings persistence
-?   ??? Bm25SearchService.cs     # BM25 keyword search engine
-?   ??? BuildDownloadService.cs  # Build artifact download orchestration
-?   ??? EmbeddingCache.cs        # Embedding vector + metadata cache
-?   ??? InstallFunctions.cs      # Software install/uninstall operations
-?   ??? IStatusReporter.cs       # Status reporting interface
-?   ??? LocalEmbeddingService.cs # ONNX-based sentence embedding inference
-?   ??? QuerySearchCache.cs      # Per-query work item cache
-?   ??? SemanticSearchService.cs # Semantic search orchestration
-?   ??? TfsRestClient.cs         # Azure DevOps REST API client
-?   ??? VersionParser.cs         # Build version string parser
-??? Utilities/
-?   ??? ErrorHandling.cs         # Error handling utilities
-??? App.xaml(.cs)                # Application entry point
-??? MainWindow.xaml(.cs)         # Main window with TabView
-??? ADO_Tools_WinUI.csproj       # Project file
++-- Assets/
+|   +-- Models/
+|   |   +-- model.onnx          # Sentence embedding model (MiniLM)
+|   |   +-- vocab.txt           # Tokenizer vocabulary
+|   +-- ADOToolsSquare256Pixel.ico
++-- Models/
+|   +-- AttachmentDto.cs         # Work item attachment data
+|   +-- BuildInfo.cs             # Azure DevOps build metadata
+|   +-- EmbeddingCacheEntry.cs   # Cached work item embedding + metadata
+|   +-- QueryDto.cs              # ADO query tree node
+|   +-- QueryExecutionResult.cs  # WIQL execution result (IDs + columns)
+|   +-- WiqlQueryResult.cs       # Full query result with work items
+|   +-- WorkItemDto.cs           # Work item data transfer object
++-- Pages/
+|   +-- BuildInfoViewModel.cs    # View model for build list items
+|   +-- LogEntryViewModel.cs     # View model for log entries
+|   +-- SettingsPage.xaml(.cs)   # Settings UI and logic
+|   +-- SoftwareDownloadPage.xaml(.cs) # Build download/install UI
+|   +-- WorkItemsPage.xaml(.cs)  # Work items UI and search
++-- Services/
+|   +-- AppSettings.cs           # JSON-based settings persistence
+|   +-- Bm25SearchService.cs     # BM25 keyword search engine
+|   +-- BuildDownloadService.cs  # Build artifact download orchestration
+|   +-- EmbeddingCache.cs        # Embedding vector + metadata cache
+|   +-- InstallFunctions.cs      # Software install/uninstall operations
+|   +-- IStatusReporter.cs       # Status reporting interface
+|   +-- LocalEmbeddingService.cs # ONNX-based sentence embedding inference
+|   +-- QuerySearchCache.cs      # Per-query work item cache
+|   +-- SemanticSearchService.cs # Semantic search orchestration
+|   +-- TfsRestClient.cs         # Azure DevOps REST API client
+|   +-- VersionParser.cs         # Build version string parser
++-- Utilities/
+|   +-- ErrorHandling.cs         # Error handling utilities
++-- App.xaml(.cs)                # Application entry point
++-- MainWindow.xaml(.cs)         # Main window with TabView
++-- ADO_Tools_WinUI.csproj       # Project file
 ```
 
 ### Key Services
@@ -262,7 +262,7 @@ src/ADO_Tools_WinUI/
 | `QuerySearchCache` | Caches work item data per query with change-detection (only re-fetches items whose `ChangedDate` has been updated) |
 | `BuildDownloadService` | Orchestrates build artifact downloading with progress reporting, cancellation, size validation, and ZIP extraction |
 | `InstallFunctions` | Handles MSI-based software installation/uninstallation, registry queries for installed software, clean uninstall with file cleanup, and installer monitoring |
-| `AppSettings` | Singleton settings manager — serializes/deserializes all app preferences to `%LocalAppData%/ADO_Tools_WinUI/settings.json` |
+| `AppSettings` | Singleton settings manager - serializes/deserializes all app preferences to `%LocalAppData%/ADO_Tools_WinUI/settings.json` |
 
 ### Models
 
@@ -350,8 +350,8 @@ The default search mode combines both engines:
 1. Semantic search and BM25 search run **in parallel** on background threads.
 2. Results are merged using **Reciprocal Rank Fusion (RRF)**, which combines the ranking positions from both systems into a unified score.
 3. This approach captures both:
-   - **Meaning-based matches** (semantic) — e.g., "crash when opening large files" finds items about application errors.
-   - **Exact keyword matches** (BM25) — e.g., "cant points" finds items with those specific terms.
+   - **Meaning-based matches** (semantic) - e.g., "crash when opening large files" finds items about application errors.
+   - **Exact keyword matches** (BM25) - e.g., "cant points" finds items with those specific terms.
 
 ### Find Similar
 

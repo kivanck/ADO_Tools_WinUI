@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using ADO_Tools_WinUI.Pages;
 using ADO_Tools_WinUI.Services;
 using Microsoft.UI.Windowing;
@@ -124,6 +125,15 @@ namespace ADO_Tools_WinUI
                 settingsPage.SaveSettings();
 
             AppSettings.Default.Save();
+        }
+
+        private void HelpButton_Click(object sender, RoutedEventArgs e)
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "https://kivanck.github.io/ADO_Tools_WinUI/ADO_Tools_UserGuide.html",
+                UseShellExecute = true
+            });
         }
 
         private static class PInvoke

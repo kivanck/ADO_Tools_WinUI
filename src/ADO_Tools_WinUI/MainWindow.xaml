@@ -43,6 +43,28 @@
                 <Grid Width="24" Background="Transparent" />
             </TabView.TabStripHeader>
 
+            <TabView.TabStripFooter>
+                <Grid HorizontalAlignment="Right" Margin="0,0,138,0">
+                    <Button
+                        x:Name="HelpButton"
+                        Width="32"
+                        Height="32"
+                        Padding="0"
+                        VerticalAlignment="Center"
+                        Background="Transparent"
+                        BorderBrush="Transparent"
+                        Click="HelpButton_Click"
+                        CornerRadius="16"
+                        ToolTipService.ToolTip="Open User Guide">
+                        <TextBlock
+                            FontFamily="Segoe Fluent Icons"
+                            FontSize="14"
+                            FontWeight="SemiBold"
+                            Text="&#xE897;" />
+                    </Button>
+                </Grid>
+            </TabView.TabStripFooter>
+
             <TabViewItem x:Name="workItemsTab" IsClosable="False">
                 <TabViewItem.HeaderTemplate>
                     <DataTemplate>
