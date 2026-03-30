@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ADO Tools - Installation Guide</title>
+<style>
+:root{--a:#0078D4;--al:#E8F0FE;--bg:#FAFAFA;--c:#FFF;--bd:#E0E0E0;--t:#1A1A1A;--ts:#555;--tm:#888;--g:#107C10;--p:#6B69D6;--o:#CA5010;--r:#E81123;--cb:#F0F0F0}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',sans-serif;color:var(--t);background:var(--bg);line-height:1.65;display:flex;justify-content:center}
+main{max-width:820px;padding:40px 48px 80px}
+h1{font-size:30px;font-weight:700;color:var(--a);margin-bottom:6px}
+.sub{font-size:15px;color:var(--ts);margin-bottom:32px}
+h2{font-size:22px;font-weight:700;margin:44px 0 14px;padding-bottom:6px;border-bottom:2px solid var(--a)}
+h3{font-size:17px;font-weight:600;margin:28px 0 10px}
+p{margin-bottom:12px}ul,ol{margin:8px 0 16px 24px}li{margin-bottom:6px}a{color:var(--a)}
+code{font-family:'Cascadia Code',monospace;background:var(--cb);padding:2px 7px;border-radius:4px;font-size:.91em}
+pre{background:#1E1E1E;color:#D4D4D4;padding:16px 20px;border-radius:8px;font-family:'Cascadia Code',monospace;font-size:13.5px;overflow-x:auto;margin:12px 0 20px;line-height:1.5}
+pre .c{color:#6A9955}pre .h{color:#DCDCAA}pre .s{color:#CE9178}
+.card{background:var(--c);border:1px solid var(--bd);border-radius:10px;padding:20px 24px;margin:16px 0}
+table{width:100%;border-collapse:collapse;margin:12px 0 20px;font-size:14px}
+th{background:var(--al);text-align:left;padding:10px 14px;font-weight:600;border:1px solid var(--bd)}
+td{padding:8px 14px;border:1px solid var(--bd);vertical-align:top}
+.co{border-left:4px solid var(--a);background:var(--al);padding:14px 18px;border-radius:0 8px 8px 0;margin:16px 0;font-size:14px}
+.co.tip{border-left-color:var(--g);background:#E8F5E8}
+.co.warn{border-left-color:var(--o);background:#FFF4E5}
+.co.imp{border-left-color:var(--r);background:#FDE8E8}
+.co strong{display:block;margin-bottom:4px}
+kbd{display:inline-block;padding:2px 8px;font-size:12px;background:#F4F4F4;border:1px solid #CCC;border-radius:4px;box-shadow:0 1px 0 #BBB}
+.st{counter-reset:step;list-style:none;margin-left:0;padding-left:0}
+.st li{counter-increment:step;padding:10px 0 10px 48px;position:relative;border-left:2px solid var(--bd);margin-left:16px}
+.st li:last-child{border-left-color:transparent}
+.st li::before{content:counter(step);position:absolute;left:-14px;top:8px;width:28px;height:28px;background:var(--a);color:#FFF;border-radius:50%;text-align:center;line-height:28px;font-size:13px;font-weight:600}
+.mh{display:flex;align-items:center;gap:10px;padding:12px 18px;margin:24px 0 0;background:var(--c);border:1px solid var(--bd);border-bottom:none;border-radius:10px 10px 0 0;font-size:16px;font-weight:600}
+.mh .b{display:inline-block;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600;color:#FFF}
+.mh .rec{background:var(--g)}.mh .adv{background:var(--p)}.mh .alt{background:var(--o)}
+.mb{background:var(--c);border:1px solid var(--bd);border-radius:0 0 10px 10px;padding:20px 24px;margin-bottom:24px}
+.ft{background:var(--cb);padding:16px 20px;border-radius:8px;font-family:'Cascadia Code',monospace;font-size:13px;line-height:1.8;margin:12px 0 20px}
+</style>
+</head>
+<body>
+<main>
+
+<h1>ADO Tools - Installation Guide</h1>
+<p class="sub">How to install the signing certificate and the MSIX application package</p>
+
+<h2>Overview</h2>
+<p>ADO Tools is distributed as an <strong>MSIX package</strong>. Because the package is <strong>self-signed</strong>, Windows requires you to <strong>trust the signing certificate</strong> before it will allow the installation.</p>
+<p>This is a one-time setup. Once the certificate is imported, you can install any version without repeating these steps.</p>
+<div class="co warn"><strong>Administrator Access Required</strong>Importing a certificate into the Local Machine store requires <strong>administrator privileges</strong>.</div>
+
+<h2>What's in the Package Folder</h2>
+<div class="ft">
+ADO_Tools_WinUI_1.0.x.0_x64/<br>
+&nbsp;&nbsp;&nbsp;&nbsp;ADO_Tools_WinUI_1.0.x.0_x64.cer - Signing certificate<br>
+&nbsp;&nbsp;&nbsp;&nbsp;ADO_Tools_WinUI_1.0.x.0_x64.msix - Application package<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<strong>Install ADO Tools.bat</strong> - Double-click to install<br>
+&nbsp;&nbsp;&nbsp;&nbsp;QuickInstall.ps1 - Installer script<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Dependencies/ - Runtime packages
+</div>
+<table>
+<tr><th>File</th><th>Purpose</th></tr>
+<tr><td><code>.cer</code></td><td>Public signing certificate. Must be imported into the Trusted People store.</td></tr>
+<tr><td><code>.msix</code></td><td>Application installer. Double-click to install once the certificate is trusted.</td></tr>
+<tr><td><code>Install ADO Tools.bat</code></td><td><strong>Double-click to install.</strong> Requests admin and runs QuickInstall.ps1 automatically.</td></tr>
+<tr><td><code>QuickInstall.ps1</code></td><td>Imports the certificate, installs dependencies, and installs the app.</td></tr>
+<tr><td><code>Dependencies/</code></td><td>Windows App SDK runtime packages.</td></tr>
+</table>
+
+<h2>Installation Methods</h2>
+<p>Choose one of the three methods. <strong>Method A</strong> is fastest and recommended.</p>
+
+<div class="mh"><span>Method A - QuickInstall Script</span><span class="b rec">Recommended</span></div>
+<div class="mb">
+<p><strong>Double-click</strong> <code>Install ADO Tools.bat</code>. It handles everything in one step.</p>
+<ol class="st">
+<li>Open the package folder in <strong>File Explorer</strong>.</li>
+<li><strong>Double-click</strong> <code>Install ADO Tools.bat</code>.</li>
+<li>If prompted by <strong>UAC</strong>, click <strong>Yes</strong>.</li>
+<li>The script shows progress: Step 1 (certificate), Step 2 (dependencies), Step 3 (app).</li>
+<li><strong>ADO Tools</strong> appears in the Start menu. Press any key to close.</li>
+</ol>
+<div class="co tip"><strong>If the script won't run</strong>Open PowerShell as Admin and run:<br><code>PowerShell -ExecutionPolicy Bypass -File ".\QuickInstall.ps1"</code></div>
+</div>
+
+<div class="mh"><span>Method B - Manual Certificate Import (GUI)</span><span class="b alt">Step-by-step</span></div>
+<div class="mb">
+<h3>Step 1 - Open the Certificate</h3>
+<ol class="st"><li>Navigate to the package folder.</li><li><strong>Double-click</strong> the <code>.cer</code> file.</li></ol>
+<h3>Step 2 - Import Wizard</h3>
+<ol class="st"><li>Click <strong>"Install Certificate..."</strong>.</li><li>Select <strong>Local Machine</strong>, click <strong>Next</strong>.</li><li>Accept UAC if prompted.</li></ol>
+<h3>Step 3 - Choose Certificate Store</h3>
+<ol class="st"><li>Select <strong>"Place all certificates in the following store"</strong>.</li><li>Click <strong>Browse...</strong>, select <strong>"Trusted People"</strong>, click <strong>OK</strong>.</li><li>Click <strong>Next</strong>.</li></ol>
+<div class="co imp"><strong>Important</strong>Select <strong>"Trusted People"</strong>, NOT "Trusted Root Certification Authorities".</div>
+<h3>Step 4 - Finish</h3>
+<ol class="st"><li>Click <strong>Finish</strong>. Confirmation appears.</li></ol>
+<h3>Step 5 - Install MSIX</h3>
+<ol class="st"><li><strong>Double-click</strong> the <code>.msix</code> file.</li><li>App Installer opens. Click <strong>Install</strong>.</li><li>Find <strong>ADO Tools</strong> in the Start menu.</li></ol>
+</div>
+
+<div class="mh"><span>Method C - PowerShell Commands</span><span class="b adv">Advanced</span></div>
+<div class="mb">
+<p>Open <strong>PowerShell as Administrator</strong>:</p>
+<pre><span class="c"># Navigate to the package folder</span>
+cd <span class="s">"C:\path\to\ADO_Tools_WinUI_1.0.5.0_x64"</span>
+
+<span class="c"># Import the certificate</span>
+<span class="h">Import-Certificate</span> -FilePath <span class="s">".\ADO_Tools_WinUI_1.0.5.0_x64.cer"</span> -CertStoreLocation <span class="s">Cert:\LocalMachine\TrustedPeople</span>
+
+<span class="c"># Install dependencies</span>
+<span class="h">Add-AppxPackage</span> -Path <span class="s">".\Dependencies\x64\Microsoft.WindowsAppRuntime.1.8.msix"</span>
+
+<span class="c"># Install the app</span>
+<span class="h">Add-AppxPackage</span> -Path <span class="s">".\ADO_Tools_WinUI_1.0.5.0_x64.msix"</span></pre>
+</div>
+
+<h2>Verifying the Certificate</h2>
+<ol class="st"><li>Press <kbd>Win</kbd>+<kbd>R</kbd>, type <code>certlm.msc</code>, press Enter.</li><li>Expand <strong>Trusted People &gt; Certificates</strong>.</li><li>Look for <strong>"CN=Kivanc.Karakas"</strong>.</li></ol>
+
+<h2>Updating</h2>
+<p>You <strong>do not need to import the certificate again</strong> for updates. Just double-click the new <code>.msix</code>.</p>
+
+<h2>Uninstalling</h2>
+<ul><li><strong>Settings &gt; Apps</strong> - search "ADO Tools" - click <strong>Uninstall</strong>.</li><li>Or right-click in Start menu and choose <strong>Uninstall</strong>.</li></ul>
+<h3>Remove Certificate (Optional)</h3>
+<p>Open <code>certlm.msc</code>, go to Trusted People &gt; Certificates, right-click <strong>"CN=Kivanc.Karakas"</strong> and Delete.</p>
+<p>Or via PowerShell (as Admin):</p>
+<pre><span class="h">Get-ChildItem</span> <span class="s">Cert:\LocalMachine\TrustedPeople</span> | Where-Object { $_.Subject -like <span class="s">"*Kivanc*"</span> } | <span class="h">Remove-Item</span></pre>
+
+<h2>Troubleshooting</h2>
+<div class="card">
+<h3>Install.ps1 window flashes and closes</h3>
+<p><strong>Do not use Install.ps1.</strong> It has expired signatures. Use <code>Install ADO Tools.bat</code> instead.</p>
+<h3>"Execution of scripts is disabled"</h3>
+<ul><li>Use <code>Install ADO Tools.bat</code> - it bypasses the policy automatically.</li><li>Or: <code>PowerShell -ExecutionPolicy Bypass -File ".\QuickInstall.ps1"</code></li></ul>
+<h3>"Install" button greyed out</h3>
+<ul><li>Certificate not imported or in wrong store. Must be in <strong>Trusted People</strong>.</li></ul>
+<h3>"Access is denied"</h3>
+<ul><li>Need admin for Local Machine store. Or use Current User store instead.</li></ul>
+<h3>Dependencies fail</h3>
+<ul><li>Ensure <code>Dependencies</code> subfolder is present.</li><li>Try: <code>Add-AppxPackage -Path ".\Dependencies\x64\Microsoft.WindowsAppRuntime.1.8.msix"</code></li></ul>
+</div>
+
+<hr style="margin-top:60px;border:none;border-top:1px solid var(--bd)">
+<p style="margin-top:16px;font-size:13px;color:var(--tm);text-align:center">ADO Tools - Azure DevOps Productivity Suite<br>Contact: <strong>kivanc.karakas@bentley.com</strong></p>
+
+</main>
+</body>
+</html>

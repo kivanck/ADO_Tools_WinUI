@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ADO Tools - User Guide</title>
+    <style>
+        :root {
+            --accent: #0078D4;
+            --accent-light: #E8F0FE;
+            --bg: #FAFAFA;
+            --card: #FFFFFF;
+            --border: #E0E0E0;
+            --text: #1A1A1A;
+            --text-secondary: #555;
+            --text-muted: #888;
+            --green: #107C10;
+            --purple: #6B69D6;
+            --orange: #CA5010;
+            --red: #E81123;
+            --teal: #00976E;
+            --sidebar-bg: #F3F3F3;
+            --sidebar-width: 280px;
+            --code-bg: #F0F0F0;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; color: var(--text); background: var(--bg); line-height: 1.65; display: flex; }
+        nav { position: fixed; top: 0; left: 0; width: var(--sidebar-width); height: 100vh; overflow-y: auto; background: var(--sidebar-bg); border-right: 1px solid var(--border); padding: 24px 0; z-index: 100; }
+        nav .nav-title { font-size: 15px; font-weight: 700; color: var(--accent); padding: 0 20px 16px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+        nav a { display: block; padding: 6px 20px; font-size: 13px; color: var(--text-secondary); text-decoration: none; transition: all 0.15s; }
+        nav a:hover { background: #E5E5E5; color: var(--accent); }
+        nav a.section { font-weight: 600; color: var(--text); margin-top: 14px; font-size: 13.5px; }
+        nav a.sub { padding-left: 36px; font-size: 12.5px; }
+        main { margin-left: var(--sidebar-width); max-width: 900px; padding: 40px 48px 80px; flex: 1; }
+        h1 { font-size: 32px; font-weight: 700; color: var(--accent); margin-bottom: 8px; }
+        h1 + p.subtitle { font-size: 16px; color: var(--text-secondary); margin-bottom: 32px; }
+        h2 { font-size: 24px; font-weight: 700; color: var(--text); margin: 48px 0 16px; padding-bottom: 8px; border-bottom: 2px solid var(--accent); }
+        h3 { font-size: 18px; font-weight: 600; margin: 32px 0 12px; color: var(--text); }
+        h4 { font-size: 15px; font-weight: 600; margin: 24px 0 8px; color: var(--text-secondary); }
+        p { margin-bottom: 12px; }
+        ul, ol { margin: 8px 0 16px 24px; }
+        li { margin-bottom: 6px; }
+        a { color: var(--accent); }
+        code { font-family: 'Cascadia Code', 'Consolas', monospace; background: var(--code-bg); padding: 1px 6px; border-radius: 4px; font-size: 0.92em; }
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; margin: 16px 0; }
+        .screenshot { margin: 20px 0; text-align: center; }
+        .screenshot img { max-width: 100%; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); cursor: pointer; }
+        .lightbox { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 9999; justify-content: center; align-items: center; cursor: pointer; }
+        .lightbox.active { display: flex; }
+        .lightbox img { max-width: 92%; max-height: 92%; border-radius: 8px; box-shadow: 0 4px 24px rgba(0,0,0,0.4); }
+        .screenshot .caption { display: block; margin-top: 8px; font-size: 12px; color: var(--text-muted); font-style: italic; }
+        table { width: 100%; border-collapse: collapse; margin: 12px 0 20px; font-size: 14px; }
+        th { background: var(--accent-light); text-align: left; padding: 10px 14px; font-weight: 600; border: 1px solid var(--border); }
+        td { padding: 8px 14px; border: 1px solid var(--border); vertical-align: top; }
+        tr:nth-child(even) { background: #FAFAFA; }
+        .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; color: #FFF; vertical-align: middle; }
+        .badge.blue { background: var(--accent); }
+        .badge.green { background: var(--teal); }
+        .badge.purple { background: var(--purple); }
+        .badge.orange { background: var(--orange); }
+        .callout { border-left: 4px solid var(--accent); background: var(--accent-light); padding: 14px 18px; border-radius: 0 8px 8px 0; margin: 16px 0; font-size: 14px; }
+        .callout.tip { border-left-color: var(--green); background: #E8F5E8; }
+        .callout.warning { border-left-color: var(--orange); background: #FFF4E5; }
+        .callout.important { border-left-color: var(--red); background: #FDE8E8; }
+        .callout strong { display: block; margin-bottom: 4px; }
+        kbd { display: inline-block; padding: 2px 8px; font-family: 'Segoe UI', sans-serif; font-size: 12px; background: #F4F4F4; border: 1px solid #CCC; border-radius: 4px; box-shadow: 0 1px 0 #BBB; }
+        .steps { counter-reset: step; list-style: none; margin-left: 0; padding-left: 0; }
+        .steps li { counter-increment: step; padding: 10px 0 10px 48px; position: relative; border-left: 2px solid var(--border); margin-left: 16px; }
+        .steps li:last-child { border-left-color: transparent; }
+        .steps li::before { content: counter(step); position: absolute; left: -14px; top: 8px; width: 28px; height: 28px; background: var(--accent); color: #FFF; border-radius: 50%; text-align: center; line-height: 28px; font-size: 13px; font-weight: 600; }
+        @media (max-width: 900px) { nav { display: none; } main { margin-left: 0; padding: 24px; } }
+        @media print { nav { display: none; } main { margin-left: 0; } .screenshot { break-inside: avoid; } }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="nav-title">ADO Tools - User Guide</div>
+    <a href="#welcome" class="section">Welcome</a>
+    <a href="#getting-started" class="section">Getting Started</a>
+    <a href="#first-launch" class="sub">First Launch</a>
+    <a href="#connection-settings" class="sub">Connection Settings</a>
+    <a href="#folder-settings" class="sub">Download Folders</a>
+    <a href="#work-items" class="section">Work Items</a>
+    <a href="#wi-connecting" class="sub">Connecting</a>
+    <a href="#wi-queries" class="sub">Running Queries</a>
+    <a href="#wi-grid" class="sub">The Data Grid</a>
+    <a href="#wi-columns" class="sub">Column Picker</a>
+    <a href="#wi-filters" class="sub">Filtering Rows</a>
+    <a href="#wi-sorting" class="sub">Sorting</a>
+    <a href="#wi-highlighting" class="sub">Highlighting</a>
+    <a href="#wi-download-attachments" class="sub">Downloading Attachments</a>
+    <a href="#wi-download-by-id" class="sub">Download by ID</a>
+    <a href="#wi-open-browser" class="sub">Open in Browser</a>
+    <a href="#search" class="section">Searching</a>
+    <a href="#search-query" class="sub">Search Within Query</a>
+    <a href="#search-backlog" class="sub">Backlog Search</a>
+    <a href="#search-modes" class="sub">Search Modes</a>
+    <a href="#search-find-similar" class="sub">Find Similar</a>
+    <a href="#search-suggestions" class="sub">Suggestions &amp; History</a>
+    <a href="#search-index" class="sub">Building the Index</a>
+    <a href="#software-downloads" class="section">Software Downloads</a>
+    <a href="#sd-products" class="sub">Product Selection</a>
+    <a href="#sd-load-builds" class="sub">Loading Builds</a>
+    <a href="#sd-update" class="sub">Run Update</a>
+    <a href="#sd-download-only" class="sub">Download Only</a>
+    <a href="#sd-installed" class="sub">Installed Software</a>
+    <a href="#sd-log" class="sub">Activity Log</a>
+    <a href="#settings" class="section">Settings</a>
+    <a href="#settings-connection" class="sub">Connection</a>
+    <a href="#settings-search-index" class="sub">Search Index</a>
+    <a href="#settings-paths" class="sub">Download Paths</a>
+    <a href="#settings-about" class="sub">About</a>
+    <a href="#tips" class="section">Tips &amp; Shortcuts</a>
+    <a href="#troubleshooting" class="section">Troubleshooting</a>
+</nav>
+
+<main>
+
+<h1 id="welcome">ADO Tools</h1>
+<p class="subtitle">Azure DevOps Productivity Suite - User Guide</p>
+
+<p><strong>ADO Tools</strong> is a Windows desktop application that helps you work with Azure DevOps more efficiently. It brings together work item browsing, intelligent search, attachment downloads, and software build management into a single, modern interface.</p>
+
+<p>The application has three main tabs:</p>
+<table>
+    <tr><th>Tab</th><th>What it does</th></tr>
+    <tr><td><strong>Work Items</strong></td><td>Browse Azure DevOps queries, search across your backlog using AI-powered semantic search or keyword matching, download work item attachments, and find similar work items.</td></tr>
+    <tr><td><strong>Software Downloads</strong></td><td>List available builds from Azure DevOps pipelines, download artifacts, and install or update software with one click.</td></tr>
+    <tr><td><strong>Settings</strong></td><td>Configure your Azure DevOps connection, set download folders, and build/manage the search index.</td></tr>
+</table>
+
+<div class="screenshot">
+    <img src="images/The main ADO Tools window.png" alt="The main ADO Tools window showing the three tabs">
+    <span class="caption">The main ADO Tools window with the three tab headers: Work Items, Software Downloads, and Settings.</span>
+</div>
+
+<div class="callout tip">
+    <strong>Tip</strong>
+    All your settings, column layouts, window size, and search history are saved automatically and restored when you reopen the application.
+</div>
+
+
+<h2 id="getting-started">Getting Started</h2>
+
+<h3 id="first-launch">First Launch</h3>
+<p>When you open ADO Tools for the first time, you need to configure your Azure DevOps connection. Navigate to the <strong>Settings</strong> tab to get started.</p>
+
+<h3 id="connection-settings">Setting Up Your Connection</h3>
+<ol class="steps">
+    <li>Go to the <strong>Settings</strong> tab.</li>
+    <li>Enter your Azure DevOps <strong>Organisation</strong> name (e.g., <code>myorg</code>).</li>
+    <li>Enter your default <strong>Project</strong> name (e.g., <code>civil</code>).</li>
+    <li>Paste your <strong>Personal Access Token (PAT)</strong> into the password field.</li>
+    <li>Click <strong>Validate Connection</strong> to test. A green success message confirms it is working.</li>
+</ol>
+
+<div class="screenshot">
+    <img src="images/The Settings tab Connection card.png" alt="Settings tab Connection card">
+    <span class="caption">The Connection card with Organisation, Project, and PAT fields, showing a green validation message.</span>
+</div>
+
+<div class="callout">
+    <strong>What is a PAT?</strong>
+    A Personal Access Token is a secure way to authenticate with Azure DevOps without using your password.
+</div>
+
+<h4>How to create a PAT:</h4>
+<ol class="steps">
+    <li>Open your browser and go to <a href="https://dev.azure.com/bentleycs" target="_blank">https://dev.azure.com/bentleycs</a>.</li>
+    <li>Click your <strong>profile icon</strong> (top-right corner) and select <strong>"Personal access tokens"</strong>. Or go directly to: <a href="https://dev.azure.com/bentleycs/_usersSettings/tokens" target="_blank">https://dev.azure.com/bentleycs/_usersSettings/tokens</a>.</li>
+    <li>Click <strong>"+ New Token"</strong>.</li>
+    <li>Give it a name (e.g., <code>ADO Tools</code>), set an expiration date, and select the following scopes:
+        <ul>
+            <li><strong>Work Items</strong> - Read</li>
+            <li><strong>Build</strong> - Read</li>
+            <li><strong>Code</strong> - Read</li>
+        </ul>
+    </li>
+    <li>Click <strong>Create</strong>.</li>
+    <li><strong>Copy the token immediately</strong> - you will not be able to see it again. Paste it into the PAT field in ADO Tools Settings.</li>
+</ol>
+
+<div class="screenshot">
+    <img src="images/PATQuaryStepbyStep.png" alt="Step-by-step guide to creating a Personal Access Token in Azure DevOps">
+    <span class="caption">How to navigate to the PAT page and create a new token in Azure DevOps. (Click to enlarge)</span>
+</div>
+
+<div class="callout warning">
+    <strong>Keep your PAT safe</strong>
+    Treat your PAT like a password. Do not share it or commit it to source control. If compromised, revoke it immediately from the same page and create a new one.
+</div>
+
+<h3 id="folder-settings">Setting Up Download Folders</h3>
+<p>You need to configure two download folders:</p>
+<table>
+    <tr><th>Folder</th><th>Used for</th></tr>
+    <tr><td><strong>Work Items Download Folder</strong></td><td>Attachments downloaded from work items (one subfolder per work item).</td></tr>
+    <tr><td><strong>Software Download Folder</strong></td><td>Build artifacts (ZIPs and extracted setup files) from Software Downloads.</td></tr>
+</table>
+<p>Click the <strong>folder icon</strong> next to each path to open a folder picker, or type the path directly.</p>
+
+<div class="screenshot">
+    <img src="images/The Settings tab Download Paths.png" alt="Settings tab Download Paths card">
+    <span class="caption">The Download Paths card with both folder fields and Browse buttons.</span>
+</div>
+
+
+<h2 id="work-items">Work Items</h2>
+
+<p>The Work Items tab is your primary workspace for browsing, searching, and downloading Azure DevOps work items and their attachments.</p>
+
+<div class="screenshot">
+    <img src="images/Screenshot The full Work Items tab.png" alt="Full Work Items tab">
+    <span class="caption">The full Work Items tab showing the Connection bar, Query panel, toolbar, data grid, and status bar.</span>
+</div>
+
+<h3 id="wi-connecting">Connecting to a Project</h3>
+<p>If your settings are already configured, ADO Tools <strong>automatically connects</strong> when you open the app and loads your query tree. You will see "Connected" next to the Connect button.</p>
+<p>To connect manually or switch projects:</p>
+<ol class="steps">
+    <li>Enter the <strong>Project</strong> name in the text box at the top (e.g., <code>civil</code>).</li>
+    <li>Click the blue <strong>Connect</strong> button.</li>
+    <li>The query tree will populate with your Favorites and All Queries.</li>
+</ol>
+
+<div class="screenshot">
+    <img src="images/The Connection bar at the top.png" alt="Connection bar">
+    <span class="caption">The Connection bar showing the Project field, Connect button, and connection status.</span>
+</div>
+
+
+<h3 id="wi-queries">Running Queries</h3>
+<p>After connecting, the <strong>Query</strong> panel shows your Azure DevOps queries organized into two groups:</p>
+<ul>
+    <li><strong>Favorites</strong> - Your personal and team favorited queries (expanded by default).</li>
+    <li><strong>All Queries</strong> - The complete query tree from your project (collapsed by default).</li>
+</ul>
+
+<h4>To run a query:</h4>
+<ol class="steps">
+    <li>Expand the query tree and click on a query to select it.</li>
+    <li>Click the <strong>Read Items</strong> button (or double-click the query to collapse the tree first).</li>
+    <li>The app fetches work items and displays them in the grid below.</li>
+</ol>
+
+<div class="screenshot">
+    <img src="images/The Query panel showing the tree view.png" alt="Query panel with tree view">
+    <span class="caption">The query tree with Favorites expanded and a query selected, with the Read Items button on the right.</span>
+</div>
+
+<div class="callout tip">
+    <strong>Collapsing the Query Tree</strong>
+    Double-click a query to collapse the tree into a compact label (e.g., "Active Bugs"). This gives you more screen space for the data grid. Click the label to expand the tree again.
+</div>
+
+<h4>Smart Caching</h4>
+<p>When you run a query, ADO Tools uses intelligent caching to speed things up:</p>
+<ul>
+    <li>The first time you run a query, all work items are fetched from the server.</li>
+    <li>On subsequent runs, only <strong>new or changed items</strong> are re-fetched; the rest are loaded instantly from the local cache.</li>
+    <li>Progress is shown in two phases: "Checking 50/200 items..." (comparing change dates) and "Fetching 5/12 items..." (downloading only what changed).</li>
+</ul>
+
+
+<h3 id="wi-grid">The Data Grid</h3>
+<p>Work items are displayed in a full-featured data grid. The grid header shows a <strong>context badge</strong> indicating what data is currently displayed:</p>
+<table>
+    <tr><th>Badge Colour</th><th>Label</th><th>Meaning</th></tr>
+    <tr><td><span class="badge blue">Blue</span></td><td>Query: <em>query name</em></td><td>Results from an Azure DevOps query.</td></tr>
+    <tr><td><span class="badge green">Green</span></td><td>Search in "<em>query name</em>"</td><td>Keyword search within the current query results.</td></tr>
+    <tr><td><span class="badge purple">Purple</span></td><td>Backlog Search: "<em>search term</em>"</td><td>Semantic or keyword search across the full backlog index.</td></tr>
+    <tr><td><span class="badge orange">Orange</span></td><td>Similar to: #<em>ID</em></td><td>Results from "Find Similar" - items similar to a specific work item.</td></tr>
+</table>
+
+<div class="screenshot">
+    <img src="images/The data grid header area.png" alt="Data grid header area">
+    <span class="caption">The data grid header showing the context badge, item count, and filter/column picker buttons.</span>
+</div>
+
+
+<h3 id="wi-columns">Customising Columns</h3>
+<p>The columns displayed in the grid are <strong>dynamic</strong> - they match the fields returned by your query. You can customise which columns are visible:</p>
+<ol class="steps">
+    <li>Click the <strong>column picker</strong> button (grid icon) in the top-right corner of the grid header.</li>
+    <li>A flyout opens with checkboxes for every available field. Check or uncheck fields to show or hide columns.</li>
+    <li>Click <strong>Reset to Default</strong> to restore the original column layout.</li>
+</ol>
+<p>Column widths are <strong>resizable</strong> - drag the column borders to adjust. Your column choices and widths are saved separately for query mode and search mode, and persist between sessions.</p>
+
+<div class="screenshot">
+    <img src="images/The column picker flyout.png" alt="Column picker flyout">
+    <span class="caption">The column picker flyout with checkboxes for available fields.</span>
+</div>
+
+
+<h3 id="wi-filters">Filtering Rows</h3>
+<p>Click the <strong>filter</strong> button (funnel icon) in the grid header to open the filter flyout. You can filter by up to five fields simultaneously:</p>
+<ul>
+    <li><strong>Type</strong> - e.g., Bug, Product Backlog Item, User Story</li>
+    <li><strong>State</strong> - e.g., New, Active, Closed, Done</li>
+    <li><strong>Area Path</strong></li>
+    <li><strong>Priority</strong> - e.g., 1, 2, 3, 4</li>
+    <li><strong>Assigned To</strong></li>
+</ul>
+<p>Each filter dropdown is populated with the actual values from your current data. A <strong>badge number</strong> appears on the filter button showing how many filters are active. Click <strong>Clear Filters</strong> to reset all filters at once.</p>
+
+<div class="screenshot">
+    <img src="images/The filter flyout.png" alt="Filter flyout">
+    <span class="caption">The filter flyout showing dropdowns for Type, State, Area Path, Priority, and Assigned To.</span>
+</div>
+
+
+<h3 id="wi-sorting">Sorting</h3>
+<p>Click any <strong>column header</strong> to sort the grid by that column. Click again to toggle between ascending and descending order. A small arrow indicator appears on the sorted column.</p>
+
+
+<h3 id="wi-highlighting">Highlighting Recent Items</h3>
+<p>The <strong>Highlight</strong> control in the left toolbar lets you visually mark recently created items. Enter a number of days (e.g., <code>5</code>) and any work item created within that many days from today will be highlighted in <strong>blue</strong>.</p>
+
+<div class="screenshot">
+    <img src="images/The data grid with a few rows highlighted.png" alt="Highlighted rows">
+    <span class="caption">The data grid with recently created rows highlighted in blue.</span>
+</div>
+
+
+<h3 id="wi-download-attachments">Downloading Attachments</h3>
+<p>To download attachments from one or more work items:</p>
+<ol class="steps">
+    <li>Select one or more rows in the grid (hold <kbd>Ctrl</kbd> or <kbd>Shift</kbd> to multi-select).</li>
+    <li>Click <strong>Download Selected</strong> in the toolbar. The button shows the selection count (e.g., "Download Selected (3)").</li>
+    <li>The app creates a folder for each work item (named by its ID) inside your configured download folder.</li>
+    <li>Attachments are downloaded into each folder, along with an HTML file linking back to the work item on Azure DevOps.</li>
+    <li>When complete, a clickable <strong>folder link</strong> appears in the status bar to open the download location in Explorer.</li>
+</ol>
+
+<div class="screenshot">
+    <img src="images/The status bar at the bottom.png" alt="Status bar after download">
+    <span class="caption">The status bar after a download, showing a clickable folder link.</span>
+</div>
+
+<div class="callout tip">
+    <strong>Tip</strong>
+    If any individual attachment fails to download, the rest continue. The status bar shows how many failed (e.g., "Download Complete (1 attachment(s) failed)").
+</div>
+
+
+<h3 id="wi-download-by-id">Download by Work Item ID</h3>
+<p>If you know the work item ID, you can download its attachments directly without loading a query:</p>
+<ol class="steps">
+    <li>Enter the work item ID in the <strong>Work Item</strong> number box on the right side of the toolbar (e.g., <code>2011414</code>).</li>
+    <li>Click the <strong>download icon button</strong> next to it.</li>
+    <li>The app fetches the work item from the API, downloads all attachments, and shows the folder link.</li>
+</ol>
+<div class="callout">
+    <strong>Note</strong>
+    Selecting a row in the grid automatically populates the Work Item ID field, so you can easily switch between grid-based and ID-based downloads.
+</div>
+
+
+<h3 id="wi-open-browser">Opening Work Items in the Browser</h3>
+<p><strong>Double-click</strong> any row in the data grid to open that work item in your default web browser on Azure DevOps.</p>
+
+
+<h2 id="search">Searching</h2>
+
+<p>ADO Tools provides two levels of search - searching <em>within</em> the current query results, and searching across your entire <em>backlog</em> using an AI-powered index. Both are accessed from the Work Items tab.</p>
+<p>The Work Items tab has two sub-tabs at the top: <strong>Query</strong> and <strong>Search</strong>. Switch between them to access different search scopes.</p>
+
+
+<h3 id="search-query">Search Within Query Results</h3>
+<p>After running a query, a <strong>search box</strong> appears below the query tree on the <strong>Query</strong> sub-tab. This lets you search through the loaded results using keyword matching (BM25).</p>
+<ol class="steps">
+    <li>Run a query to load work items.</li>
+    <li>Type your search terms in the search box (e.g., <code>crash report</code>).</li>
+    <li>Press <kbd>Enter</kbd> or click the search icon to execute.</li>
+    <li>Results are ranked by relevance, with BM25 scores shown in the Title column.</li>
+</ol>
+<p>Click the <strong>clear</strong> button next to the search box to return to the full query results.</p>
+
+<div class="screenshot">
+    <img src="images/The Query sub-tab with query results.png" alt="Query search results">
+    <span class="caption">The Query sub-tab with a search term entered and scored results in the grid.</span>
+</div>
+
+
+<h3 id="search-backlog">Backlog Search</h3>
+<p>Switch to the <strong>Search</strong> sub-tab to search across your entire backlog index. This uses the semantic search index that you build from the Settings tab (see <a href="#search-index">Building the Search Index</a>).</p>
+<ol class="steps">
+    <li>Click the <strong>Search</strong> sub-tab.</li>
+    <li>Select a search mode from the dropdown (see <a href="#search-modes">Search Modes</a> below).</li>
+    <li>Type your search query and press <kbd>Enter</kbd>.</li>
+    <li>Results appear in the grid with relevance scores.</li>
+</ol>
+
+<p>Additional controls on the Search sub-tab:</p>
+<table>
+    <tr><th>Control</th><th>Description</th></tr>
+    <tr><td><strong>Exclude Done</strong></td><td>Checkbox that filters out completed/closed/done items from results.</td></tr>
+    <tr><td><strong>Top</strong></td><td>Number of results to return (default: 30, max: 500).</td></tr>
+    <tr><td><strong>Clear</strong></td><td>Clears the search and returns to the previous query results.</td></tr>
+    <tr><td><strong>Update</strong></td><td>Fetches new/changed items from Azure DevOps and updates the search index incrementally.</td></tr>
+</table>
+
+<div class="screenshot">
+    <img src="images/The Search sub-tab showing the search mode.png" alt="Backlog search results">
+    <span class="caption">The Search sub-tab with a search query entered and results displayed with relevance scores.</span>
+</div>
+
+
+<h3 id="search-modes">Search Modes</h3>
+<p>The backlog search supports three modes, selected from the dropdown on the left:</p>
+<table>
+    <tr><th>Mode</th><th>How it works</th><th>Best for</th></tr>
+    <tr><td><strong>Hybrid (RRF)</strong></td><td>Runs both Semantic and Keyword searches in parallel, then combines the rankings using Reciprocal Rank Fusion. Items found by both methods get boosted.</td><td>General use - the recommended default. Combines the strengths of both methods.</td></tr>
+    <tr><td><strong>Semantic</strong></td><td>Uses AI sentence embeddings to find items with similar <em>meaning</em>, even if they use different words.</td><td>Natural language queries like "application crashes when opening large DGN files".</td></tr>
+    <tr><td><strong>Keyword (BM25)</strong></td><td>Traditional keyword matching with TF-IDF weighting. Finds items containing the exact words you type.</td><td>Searching for specific terms or codes like "cant points" or "PGL elevation".</td></tr>
+</table>
+<div class="callout tip">
+    <strong>Tip</strong>
+    <strong>Hybrid</strong> mode is usually the best choice. Semantic search understands meaning (e.g., "crash" matches "application error"), while BM25 catches exact technical terms. Hybrid combines both.
+</div>
+
+
+<h3 id="search-find-similar">Find Similar</h3>
+<p>The <strong>Find Similar</strong> feature finds work items that are similar to a specific item - useful for finding duplicates or related issues.</p>
+<ol class="steps">
+    <li>Enter a work item ID in the <strong>Work Item</strong> field (or select a row in the grid - the ID is filled automatically).</li>
+    <li>Click <strong>Find Similar (Cache)</strong>.</li>
+    <li>The app searches the backlog index for similar items using both semantic and keyword matching.</li>
+    <li>The source item appears at the top of the results tagged with <strong>[Source]</strong> and highlighted in orange.</li>
+    <li>Similar items are listed below with relevance scores (e.g., "[82%]").</li>
+</ol>
+
+<div class="screenshot">
+    <img src="images/Find Similar results in the data grid.png" alt="Find Similar results">
+    <span class="caption">Find Similar results with the source item highlighted in orange at the top.</span>
+</div>
+
+<div class="callout">
+    <strong>Offline Support</strong>
+    Find Similar works even when you are not connected to Azure DevOps, as long as the work item exists in your local search index.
+</div>
+
+
+<h3 id="search-suggestions">Suggestions and History</h3>
+<p>Both search boxes (Query search and Backlog search) provide intelligent auto-suggestions:</p>
+<ul>
+    <li><strong>Search History</strong> - Your recent searches appear at the top, prefixed with a clock icon. Up to 10 entries are remembered.</li>
+    <li><strong>Vocabulary Completions</strong> - As you type, the search box suggests terms from the index vocabulary that match what you are typing.</li>
+</ul>
+<p>Click into an empty search box to see your recent history. Start typing to see both history matches and vocabulary suggestions.</p>
+
+<div class="screenshot">
+    <img src="images/The backlog search box with the suggestions.png" alt="Search suggestions">
+    <span class="caption">The search box with the suggestion dropdown showing recent history and vocabulary completions.</span>
+</div>
+
+
+<h3 id="search-index">Building the Search Index</h3>
+<p>Before you can use Backlog Search or Find Similar, you need to build a search index. This is a one-time setup (with incremental updates afterward).</p>
+
+<h4>From the Settings tab (recommended for first-time setup):</h4>
+<ol class="steps">
+    <li>Go to the <strong>Settings</strong> tab.</li>
+    <li>In the <strong>Search Index</strong> card, set the <strong>Iteration Path</strong> to limit which work items are indexed (e.g., <code>Civil\OpenCivil Designer\Backlog</code>). Leave empty to index everything.</li>
+    <li>Set the <strong>Index Cutoff Date</strong> - only items created after this date will be indexed.</li>
+    <li>Click <strong>Update Index</strong>. Progress is shown as items are fetched and embedded.</li>
+    <li>Once complete, the status shows the number of items indexed.</li>
+</ol>
+
+<div class="screenshot">
+    <img src="images/The Search Index card on the Settings tab.png" alt="Search Index card">
+    <span class="caption">The Search Index card with Iteration Path, Cutoff Date, cache status, and the Update Index / Force Rebuild buttons.</span>
+</div>
+
+<h4>From the Work Items tab (quick update):</h4>
+<p>Click the <strong>Update</strong> button on the Search sub-tab to incrementally update the index without leaving the Work Items tab.</p>
+
+<h4>Force Rebuild:</h4>
+<p>The <strong>Force Rebuild</strong> button on the Settings tab deletes the entire cache and re-indexes everything from scratch. This requires a <strong>two-click confirmation</strong> (the button changes to "Confirm Rebuild?" for 5 seconds - click again to confirm, or wait for it to cancel).</p>
+<div class="callout warning">
+    <strong>Force Rebuild</strong>
+    Force Rebuild can take a long time if your backlog has thousands of items, as every item needs to be fetched and embedded. Use <strong>Update Index</strong> for normal maintenance - it only processes new or changed items.
+</div>
+
+
+<h2 id="software-downloads">Software Downloads</h2>
+
+<p>The Software Downloads tab lets you browse, download, and install software builds from Azure DevOps pipelines.</p>
+
+<div class="screenshot">
+    <img src="images/The full Software Downloads tab.png" alt="Full Software Downloads tab">
+    <span class="caption">The Software Downloads tab with Product Selection, Build List, Install Options, and Activity Log.</span>
+</div>
+
+
+<h3 id="sd-products">Product Selection</h3>
+<p>The <strong>Product Selection</strong> card at the top-left lets you choose which software product to work with. Each product is mapped to an Azure DevOps pipeline definition ID and project.</p>
+<p>Several products come pre-configured. When you select a product from the dropdown, the <strong>Def. ID</strong> and <strong>Project</strong> fields update automatically.</p>
+
+<h4>Managing Product Definitions:</h4>
+<ul>
+    <li><strong>Add (+)</strong> - Opens a dialog to add a new product definition with a name, definition ID, and project.</li>
+    <li><strong>Remove (-)</strong> - Removes the currently selected product from the list.</li>
+    <li>If you manually edit the Def. ID or Project fields, your changes are saved for that product.</li>
+</ul>
+
+<div class="screenshot">
+    <img src="images/The Product Selection card.png" alt="Product Selection card">
+    <span class="caption">The Product Selection card with product dropdown, Def. ID, Project, and Add/Remove buttons.</span>
+</div>
+
+
+<h3 id="sd-load-builds">Loading Builds</h3>
+<ol class="steps">
+    <li>Select a product from the dropdown.</li>
+    <li>Set the <strong>build count</strong> (how many recent builds to fetch, default: 30).</li>
+    <li>Click <strong>Load Builds</strong>.</li>
+    <li>The build list populates with columns: <strong>Product</strong>, <strong>Version</strong>, <strong>Result</strong>, and <strong>Finish Time</strong>.</li>
+</ol>
+<p>Versions from the <strong>latest major version</strong> are highlighted in a different colour to help you quickly identify the newest releases. Build results are colour-coded (green for succeeded, red for failed).</p>
+
+<h4>Filtering Builds:</h4>
+<p>Use the <strong>Filter builds</strong> search box above the build list to narrow down builds by version number or text.</p>
+
+<div class="screenshot">
+    <img src="images/The Build List card.png" alt="Build list">
+    <span class="caption">The Build List card with builds loaded, colour-coded results, and the filter box.</span>
+</div>
+
+
+<h3 id="sd-update">Run Update (Download, Extract, Install)</h3>
+<p>The <strong>Run Update</strong> button performs the complete update workflow:</p>
+<ol class="steps">
+    <li><strong>Download</strong> - Downloads build artifact ZIPs from Azure DevOps. Progress shows download speed and size.</li>
+    <li><strong>Extract</strong> - Extracts the ZIP contents to a subfolder.</li>
+    <li><strong>Uninstall</strong> - If a matching version is already installed, it is uninstalled first (detected automatically from the Windows Registry).</li>
+    <li><strong>Install</strong> - Runs the extracted setup executable in quiet mode.</li>
+</ol>
+
+<div class="screenshot">
+    <img src="images/The right column during a download.png" alt="Download progress">
+    <span class="caption">The download progress panel showing size, speed, progress bar, and the Stop button.</span>
+</div>
+
+<h4>Install Options:</h4>
+<table>
+    <tr><th>Option</th><th>Description</th></tr>
+    <tr><td><strong>Download Only</strong></td><td>When toggled ON, only downloads and extracts artifacts - skips uninstall and install steps.</td></tr>
+    <tr><td><strong>Clean Uninstall</strong></td><td>When toggled ON, performs additional cleanup of leftover files and folders after the standard MSI uninstall.</td></tr>
+</table>
+
+<h4>Smart Download:</h4>
+<p>If an artifact ZIP already exists on disk, the app compares the local file size with the server size. If they match and the ZIP is valid, you are asked whether to re-download or reuse the existing file, saving time on large downloads.</p>
+
+<h4>Cancelling a Download:</h4>
+<p>Click the <strong>Stop</strong> button (appears during downloads) to cancel. The download stops gracefully after the current chunk completes.</p>
+
+<div class="callout">
+    <strong>Sleep Prevention</strong>
+    During downloads and installations, ADO Tools prevents your computer from going to sleep, ensuring long downloads are not interrupted.
+</div>
+
+
+<h3 id="sd-download-only">Download Only Mode</h3>
+<p>Toggle <strong>Download Only</strong> ON if you just want to download and extract the build without installing it. This is useful when you want to:</p>
+<ul>
+    <li>Download a build to share with someone else.</li>
+    <li>Inspect the build contents before installing.</li>
+    <li>Download on one machine and install on another.</li>
+</ul>
+
+
+<h3 id="sd-installed">Viewing and Managing Installed Software</h3>
+<p>Click <strong>Installed Software</strong> (at the top-right of the Build List card) to open a dialog showing all Bentley software installed on your machine. The dialog shows:</p>
+<ul>
+    <li><strong>Product name</strong> and <strong>version number</strong> for each installed product.</li>
+    <li>An <strong>Uninstall</strong> button to remove any selected product.</li>
+    <li>A <strong>Clean Uninstall</strong> checkbox for thorough removal.</li>
+</ul>
+
+<div class="screenshot">
+    <img src="images/The Installed Bentley Software dialog.png" alt="Installed Bentley Software dialog">
+    <span class="caption">The Installed Bentley Software dialog listing installed products with Uninstall options.</span>
+</div>
+
+
+<h3 id="sd-log">Activity Log</h3>
+<p>The <strong>Activity Log</strong> panel at the bottom-right records all operations with timestamped messages. Each log entry has a contextual icon (info, progress, success, error).</p>
+<p>During downloads, progress messages update the last entry <strong>in-place</strong> rather than creating new lines, keeping the log clean and readable.</p>
+<p>An <strong>installer info bar</strong> appears at the bottom whenever Windows Installer is running, showing elapsed time.</p>
+<p>Click the <strong>trash icon</strong> to clear the log.</p>
+
+<div class="screenshot">
+    <img src="images/The Activity Log panel.png" alt="Activity Log panel">
+    <span class="caption">The Activity Log panel showing timestamped log entries with contextual icons.</span>
+</div>
+
+
+<h2 id="settings">Settings</h2>
+
+<p>The Settings tab is organized into four cards across two columns. Your settings are saved automatically when you leave the Settings tab or close the application.</p>
+
+<div class="screenshot">
+    <img src="images/The full Settings tab.png" alt="Full Settings tab">
+    <span class="caption">The Settings tab showing Search Index, Connection, Download Paths, and About cards.</span>
+</div>
+
+
+<h3 id="settings-connection">Azure DevOps Connection</h3>
+<p>The <strong>Connection</strong> card (top-right) contains:</p>
+<table>
+    <tr><th>Field</th><th>Description</th><th>Example</th></tr>
+    <tr><td><strong>Organisation</strong></td><td>Your Azure DevOps organisation name.</td><td><code>myorg</code></td></tr>
+    <tr><td><strong>Default Project</strong></td><td>The default project used across all tabs.</td><td><code>civil</code></td></tr>
+    <tr><td><strong>Personal Access Token</strong></td><td>Your PAT (stored securely in a password field).</td><td>(hidden)</td></tr>
+</table>
+<p>Click <strong>Validate Connection</strong> to test. The result appears as a colour-coded info bar:</p>
+<ul>
+    <li><strong style="color: var(--green);">Green</strong> - Connection successful.</li>
+    <li><strong style="color: var(--red);">Red</strong> - Authentication failed, access denied, or organisation not found.</li>
+    <li><strong style="color: var(--orange);">Yellow</strong> - Missing required fields.</li>
+</ul>
+
+
+<h3 id="settings-search-index">Search Index</h3>
+<p>The <strong>Search Index</strong> card (top-left) configures and manages the AI search index:</p>
+<table>
+    <tr><th>Field/Button</th><th>Description</th></tr>
+    <tr><td><strong>Iteration Path</strong></td><td>Limits indexing to a specific area/iteration path. Leave empty to index all work items in the project.</td></tr>
+    <tr><td><strong>Index Cutoff Date</strong></td><td>Only items created after this date are indexed. Helps avoid indexing very old, irrelevant items.</td></tr>
+    <tr><td><strong>Update Index</strong></td><td>Incrementally updates the index - fetches only new or changed items since the last build. Fast for routine updates.</td></tr>
+    <tr><td><strong>Force Rebuild</strong></td><td>Deletes the entire cache and re-indexes from scratch. Requires two-click confirmation.</td></tr>
+</table>
+
+
+<h3 id="settings-paths">Download Paths</h3>
+<p>The <strong>Download Paths</strong> card (full-width, bottom) has two folder settings:</p>
+<table>
+    <tr><th>Path</th><th>Used by</th></tr>
+    <tr><td><strong>Work Items Download Folder</strong></td><td>Work Items tab - where attachment downloads are saved (one subfolder per work item ID).</td></tr>
+    <tr><td><strong>Software Download Folder</strong></td><td>Software Downloads tab - where build artifacts are downloaded and extracted.</td></tr>
+</table>
+<p>Each field has a <strong>Browse</strong> button that opens a folder picker dialog.</p>
+
+
+<h3 id="settings-about">About</h3>
+<p>The <strong>About</strong> card shows the application name, version number, and author contact information.</p>
+
+
+<h2 id="tips">Tips and Shortcuts</h2>
+
+<div class="card">
+    <table>
+        <tr><th style="width: 40%;">Action</th><th>How</th></tr>
+        <tr><td>Open work item in browser</td><td><strong>Double-click</strong> a row in the data grid.</td></tr>
+        <tr><td>Select multiple work items</td><td>Hold <kbd>Ctrl</kbd> and click rows, or <kbd>Shift</kbd>+click for a range.</td></tr>
+        <tr><td>Collapse the query tree</td><td><strong>Double-click</strong> a query to collapse the tree into a compact label.</td></tr>
+        <tr><td>Expand the query tree</td><td><strong>Click</strong> the collapsed query label.</td></tr>
+        <tr><td>Run a search</td><td>Type in the search box and press <kbd>Enter</kbd>.</td></tr>
+        <tr><td>View search history</td><td><strong>Click</strong> into an empty search box to see recent searches.</td></tr>
+        <tr><td>Quickly find similar items</td><td>Select a row in the grid, then click <strong>Find Similar (Cache)</strong>.</td></tr>
+        <tr><td>Resize columns</td><td>Drag the column borders in the data grid header.</td></tr>
+        <tr><td>Cancel a download</td><td>Click the <strong>Stop</strong> button during a Software Downloads operation.</td></tr>
+        <tr><td>Open downloaded files</td><td>Click the <strong>folder link</strong> in the status bar after a download completes.</td></tr>
+    </table>
+</div>
+
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+
+<div class="card">
+
+<h4>I cannot connect - "Could not reach the server"</h4>
+<ul>
+    <li>Check your internet connection.</li>
+    <li>Verify the Organisation name in Settings is correct.</li>
+    <li>Make sure you can access <code>https://dev.azure.com/{your-org}</code> in your browser.</li>
+</ul>
+
+<h4>Authentication failed</h4>
+<ul>
+    <li>Your PAT may have expired - create a new one at <code>https://dev.azure.com/{your-org}/_usersSettings/tokens</code>.</li>
+    <li>Ensure the PAT has <strong>Read</strong> access to Work Items, Build, and Code scopes.</li>
+    <li>Use the <strong>Validate Connection</strong> button on the Settings tab for a detailed error message.</li>
+</ul>
+
+<h4>Search is disabled / "No cache found"</h4>
+<ul>
+    <li>You need to build the search index first. Go to <strong>Settings &gt; Search Index &gt; Update Index</strong>.</li>
+    <li>Make sure the ONNX embedding model files (<code>model.onnx</code> and <code>vocab.txt</code>) are present in the <code>Assets/Models</code> folder.</li>
+</ul>
+
+<h4>Search results seem inaccurate</h4>
+<ul>
+    <li>Try switching search modes - <strong>Keyword (BM25)</strong> works better for exact technical terms, <strong>Semantic</strong> for natural language descriptions.</li>
+    <li>Make sure the search index is up to date - click <strong>Update</strong> on the Search sub-tab or <strong>Update Index</strong> in Settings.</li>
+    <li>Check the <strong>Iteration Path</strong> and <strong>Cutoff Date</strong> in Settings - your target items might be outside the indexed scope.</li>
+</ul>
+
+<h4>Setup file not found during software update</h4>
+<ul>
+    <li>The app looks for an <code>.exe</code> file containing both "setup" and the product name in the extracted files.</li>
+    <li>If the build artifacts have a different naming convention, use <strong>Download Only</strong> mode and run the installer manually.</li>
+</ul>
+
+<h4>"No matching installed version found" during update</h4>
+<ul>
+    <li>This is informational - it means there is no previous version to uninstall. The app proceeds directly to installation.</li>
+</ul>
+
+<h4>Download was cancelled or failed</h4>
+<ul>
+    <li>Click <strong>Run Update</strong> again - the app detects existing ZIP files and offers to reuse them if they are valid.</li>
+    <li>Check the <strong>Activity Log</strong> for specific error messages.</li>
+</ul>
+
+<h4>Window size or columns are not being remembered</h4>
+<ul>
+    <li>Settings are saved to <code>%LocalAppData%\ADO_Tools_WinUI\settings.json</code>. Make sure this folder is writable.</li>
+    <li>If the file becomes corrupted, delete it and the app will recreate it with defaults on next launch.</li>
+</ul>
+
+</div>
+
+<hr style="margin-top: 60px; border: none; border-top: 1px solid var(--border);">
+<p style="margin-top: 16px; font-size: 13px; color: var(--text-muted); text-align: center;">
+    ADO Tools - Azure DevOps Productivity Suite<br>
+    For questions or feedback, contact <strong>kivanc.karakas@bentley.com</strong>
+</p>
+
+</main>
+
+<div class="lightbox" id="lightbox" onclick="this.classList.remove('active')">
+    <img id="lightbox-img" src="" alt="">
+</div>
+<script>
+document.querySelectorAll('.screenshot img').forEach(function(img) {
+    img.addEventListener('click', function() {
+        document.getElementById('lightbox-img').src = this.src;
+        document.getElementById('lightbox').classList.add('active');
+    });
+});
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') document.getElementById('lightbox').classList.remove('active');
+});
+</script>
+</body>
+</html>

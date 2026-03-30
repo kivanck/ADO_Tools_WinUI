@@ -95,8 +95,21 @@
     <PackageCertificateKeyFile>ADO_Tools_WinUI_TemporaryKey.pfx</PackageCertificateKeyFile>
     <AppxPackageSigningTimestampDigestAlgorithm>SHA256</AppxPackageSigningTimestampDigestAlgorithm>
     <AppxAutoIncrementPackageRevision>True</AppxAutoIncrementPackageRevision>
-    <GenerateTestArtifacts>True</GenerateTestArtifacts>
+    <GenerateTestArtifacts>False</GenerateTestArtifacts>
     <AppxBundle>Never</AppxBundle>
     <HoursBetweenUpdateChecks>0</HoursBetweenUpdateChecks>
   </PropertyGroup>
+
+  <!--
+    Copy custom installer scripts (QuickInstall.ps1 and Install ADO Tools.bat)
+    into the generated AppPackages folder after packaging.
+    The VS-generated Install.ps1 has expired Authenticode signatures and fails
+    silently, so we ship these unsigned replacements alongside it.
+  -->
+  <Target Name="CopyInstallerScripts" AfterTargets="_GenerateAppxPackage">
+    <ItemGroup>
+      <InstallerScripts Include="Installer\QuickInstall.ps1;Installer\Install ADO Tools.bat" />
+    </ItemGroup>
+    <Copy SourceFiles="@(InstallerScripts)" DestinationFolder="$(AppxPackageDir)" SkipUnchangedFiles="true" />
+  </Target>
 </Project>
