@@ -1,5 +1,4 @@
 using System;
-using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
@@ -36,13 +35,9 @@ namespace ADO_Tools_WinUI.Services
         public string SearchAreaPath { get; set; } = @"Civil\OpenCivil Designer";
         public string SearchCutoffDate { get; set; } = "2020-01-01";
 
-        /// <summary>Legacy property — migrated to SearchColumns on first load.</summary>
-        public List<string> SearchResultColumns { get; set; } = new();
-
         // ?? Column picker: visible columns per mode ??
 
-        public List<string> QueryColumns { get; set; } = new();
-        public List<string> SearchColumns { get; set; } = new()
+        public static readonly List<string> DefaultSearchColumns = new()
         {
             "System.Id", "System.Title", "System.State",
             "System.AreaPath", "Microsoft.VSTS.Common.Priority",
@@ -50,6 +45,9 @@ namespace ADO_Tools_WinUI.Services
             "System.CreatedBy", "System.CreatedDate",
             "System.WorkItemType", "System.IterationPath"
         };
+
+        public List<string> QueryColumns { get; set; } = new();
+        public List<string> SearchColumns { get; set; } = new(DefaultSearchColumns);
         public List<string> HiddenQueryColumns { get; set; } = new();
 
         // ?? Column widths per mode ??
@@ -106,17 +104,7 @@ namespace ADO_Tools_WinUI.Services
                 try
                 {
                     var json = File.ReadAllText(SettingsPath);
-                    var settings = JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
-
-                    // One-time migration: SearchResultColumns ? SearchColumns
-                    if (settings.SearchResultColumns.Count > 0 && settings.SearchColumns.Count == 0)
-                    {
-                        settings.SearchColumns = new List<string>(settings.SearchResultColumns);
-                        settings.SearchResultColumns.Clear();
-                        settings.Save();
-                    }
-
-                    return settings;
+                    return JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
                 }
                 catch
                 {

@@ -97,8 +97,8 @@ namespace ADO_Tools_WinUI
 
         private void MainTabView_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            bool goingToSettings = MainTabView.SelectedItem == settingsTab;
-            bool leavingSettings = e.RemovedItems.Count > 0 && e.RemovedItems[0] == settingsTab;
+            bool goingToSettings = MainTabView.SelectedItem is TabViewItem selected && selected == settingsTab;
+            bool leavingSettings = e.RemovedItems.Count > 0 && e.RemovedItems[0] is TabViewItem removed && removed == settingsTab;
 
             if (goingToSettings)
                 settingsPage.LoadSettings();
@@ -120,7 +120,7 @@ namespace ADO_Tools_WinUI
         private void MainWindow_Closed(object sender, WindowEventArgs args)
         {
             // Save settings if we're closing while on the settings tab
-            if (MainTabView.SelectedItem == settingsTab)
+            if (MainTabView.SelectedItem is TabViewItem tab && tab == settingsTab)
                 settingsPage.SaveSettings();
 
             AppSettings.Default.Save();

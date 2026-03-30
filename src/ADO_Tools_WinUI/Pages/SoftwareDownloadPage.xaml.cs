@@ -842,7 +842,7 @@ namespace ADO_Tools_WinUI.Pages
         /// Updates the download progress bar on the UI thread.
         /// Shows the status panel when a download starts, and updates the bar value (0–100%).
         /// </summary>
-        private async void OnDownloadProgressUpdated(DownloadProgressInfo info)
+        private void OnDownloadProgressUpdated(DownloadProgressInfo info)
         {
             DispatcherQueue.TryEnqueue(async () =>
             {

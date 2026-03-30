@@ -64,11 +64,6 @@ namespace ADO_Tools_WinUI.Pages
             ["Microsoft.VSTS.Common.ValueArea"] = "Value Area",
         };
 
-        private static readonly List<string> DefaultColumns =
-            ["System.Id", "System.Title", "System.State",
-             "System.CreatedBy", "System.CreatedDate",
-             "System.WorkItemType", "System.IterationPath"];
-
         public WorkItemsPage()
         {
             InitializeComponent();
@@ -559,7 +554,7 @@ namespace ADO_Tools_WinUI.Pages
             {
                 columns = AppSettings.Default.SearchColumns.Count > 0
                     ? AppSettings.Default.SearchColumns
-                    : DefaultColumns;
+                    : AppSettings.DefaultSearchColumns;
             }
             else
             {
@@ -1293,14 +1288,7 @@ namespace ADO_Tools_WinUI.Pages
 
             if (isSearchMode)
             {
-                settings.SearchColumns = new List<string>
-                {
-                    "System.Id", "System.Title", "System.State",
-                    "System.AreaPath", "Microsoft.VSTS.Common.Priority",
-                    "Microsoft.VSTS.Common.Severity", "System.Tags",
-                    "System.CreatedBy", "System.CreatedDate",
-                    "System.WorkItemType", "System.IterationPath"
-                };
+                settings.SearchColumns = new List<string>(AppSettings.DefaultSearchColumns);
                 settings.SearchColumnWidths.Clear();
             }
             else
@@ -1320,7 +1308,7 @@ namespace ADO_Tools_WinUI.Pages
             PopulateColumnPicker();
         }
 
-        private void ColumnPickerFlyout_Opening(object sender, object e)
+        private void ColumnPickerFlyout_Opening(object? sender, object e)
         {
             PopulateColumnPicker();
         }
