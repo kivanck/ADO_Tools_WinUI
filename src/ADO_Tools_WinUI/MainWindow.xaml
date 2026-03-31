@@ -58,8 +58,8 @@
                         ToolTipService.ToolTip="Open User Guide">
                         <TextBlock
                             FontFamily="Segoe Fluent Icons"
-                            FontSize="14"
-                            FontWeight="SemiBold"
+                            FontSize="16"
+                            FontWeight="ExtraBold"
                             Text="&#xE897;" />
                     </Button>
                 </Grid>
