@@ -11,7 +11,7 @@
     <UseWinUI>true</UseWinUI>
     <EnableMsixTooling>true</EnableMsixTooling>
     <Nullable>enable</Nullable>
-    <ApplicationIcon>Assets\ADOToolsSquare256Pixel.ico</ApplicationIcon>
+    <ApplicationIcon>Assets\ADOToolsSquareHQ_LetterK.ico</ApplicationIcon>
   </PropertyGroup>
 
 
@@ -46,7 +46,7 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="Assets\ADOToolsSquare256Pixel.ico">
+    <Content Include="Assets\ADOToolsSquareHQ_LetterK.ico">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="Assets\Models\model.onnx">

@@ -20,7 +20,7 @@ namespace ADO_Tools_WinUI
             SetTitleBar(AppTitleBar);
 
             // Set the window/taskbar icon
-            AppWindow.SetIcon("Assets/ADOToolsSquare256Pixel.ico");
+            AppWindow.SetIcon("Assets/ADOToolsSquareHQ_LetterK.ico");
 
             // Restore persisted window size or use defaults
             RestoreWindowSize();

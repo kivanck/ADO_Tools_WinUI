@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
@@ -8,7 +8,7 @@
   IgnorableNamespaces="uap rescap">
 
   <Identity
-    Name="a78ca1bd-7673-454f-a293-107fb219af9a"
+    Name="ADOTools"
     Publisher="CN=Kivanc.Karakas"
     Version="1.0.6.0" />
 
