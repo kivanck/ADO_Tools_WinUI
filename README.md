@@ -13,6 +13,7 @@ The package is signed by **Bentley Systems, Incorporated**; no certificate impor
 ## Help
 
 - [ADO Tools home page](https://kivanck.github.io/ADO_Tools_WinUI/)
+- [Quick Start](https://kivanck.github.io/ADO_Tools_WinUI/ADO_Tools_UserGuide.html#quick-start) - install, first setup and an overview
 - [User Guide](https://kivanck.github.io/ADO_Tools_WinUI/ADO_Tools_UserGuide.html)
 - [Installation](https://kivanck.github.io/ADO_Tools_WinUI/ADO_Tools_UserGuide.html#installation)
 

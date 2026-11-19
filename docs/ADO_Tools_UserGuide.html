@@ -77,13 +77,20 @@
 <nav>
     <div class="nav-title">ADO Tools - User Guide</div>
     <a href="#welcome" class="section">Welcome</a>
+    <a href="#quick-start" class="section">Quick Start</a>
+    <a href="#qs-install" class="sub">1. Install</a>
+    <a href="#qs-connect" class="sub">2. Connect to Azure DevOps</a>
+    <a href="#qs-folders" class="sub">3. Download Folders</a>
+    <a href="#qs-index" class="sub">4. Build the Search Index</a>
+    <a href="#qs-features" class="sub">What You Can Do</a>
     <a href="#installation" class="section">Installation</a>
     <a href="#install-quick" class="sub">Quick Install</a>
     <a href="#install-manual" class="sub">Install with PowerShell</a>
     <a href="#install-update" class="sub">Updating &amp; Uninstalling</a>
-    <a href="#getting-started" class="section">Getting Started</a>
+    <a href="#getting-started" class="section">Setup Details</a>
     <a href="#first-launch" class="sub">First Launch</a>
     <a href="#connection-settings" class="sub">Connection Settings</a>
+    <a href="#create-pat" class="sub">Creating a PAT</a>
     <a href="#folder-settings" class="sub">Download Folders</a>
     <a href="#work-items" class="section">Work Items</a>
     <a href="#wi-connecting" class="sub">Connecting</a>
@@ -154,6 +161,58 @@
 </div>
 
 
+<h2 id="quick-start">Quick Start</h2>
+<p>Four steps get ADO Tools ready to use. Plan some time for step 4: the first search index build is the only slow part.</p>
+
+<h3 id="qs-install">1. Install</h3>
+<ol class="steps">
+    <li>Download <code>ADO_Tools_WinUI_&lt;version&gt;_x64.zip</code> from the <a href="https://github.com/kivanck/ADO_Tools_WinUI/releases/latest" target="_blank">latest release</a> and extract it.</li>
+    <li>Double-click the <code>.msix</code> file and click <strong>Install</strong> (publisher: <strong>Bentley Systems, Incorporated</strong>). No administrator rights or certificates are needed.</li>
+    <li>Start <strong>ADO Tools</strong> from the Start menu and accept the Windows <strong>User Account Control</strong> prompt. The app runs as administrator because it installs and uninstalls software.</li>
+</ol>
+<p>Missing dependency, updating, or upgrading from version 1.0.8 or earlier: see <a href="#installation">Installation</a>.</p>
+
+<h3 id="qs-connect">2. Connect to Azure DevOps</h3>
+<ol class="steps">
+    <li>Open the <strong>Settings</strong> tab. <strong>Organisation</strong> (<code>bentleycs</code>) and <strong>Default Project</strong> (<code>civil</code>) are already filled in.</li>
+    <li>Paste your <strong>Personal Access Token (PAT)</strong> with <em>Work Items</em>, <em>Build</em> and <em>Code</em> read access. Don't have one yet? See <a href="#create-pat">Creating a PAT</a>.</li>
+    <li>Click <strong>Validate Connection</strong>. A green message confirms the connection.</li>
+</ol>
+
+<h3 id="qs-folders">3. Set the download folders</h3>
+<p>In the <strong>Download Paths</strong> card on the Settings tab, choose:</p>
+<ul>
+    <li><strong>Software Download Folder</strong> - where builds are downloaded and extracted. Required for Software Downloads; builds need several GB of free space each.</li>
+    <li><strong>Work Items Download Folder</strong> - where work item attachments are saved. If empty, your Desktop is used.</li>
+</ul>
+
+<h3 id="qs-index">4. Build the search index (first time only)</h3>
+<p><a href="#search-backlog">Backlog Search</a> and <a href="#search-find-similar">Find Similar</a> use a local search index of your backlog. It is <strong>not created automatically</strong>: build it once from the <strong>Search Index</strong> card on the Settings tab.</p>
+<ol class="steps">
+    <li>Check the scope. <strong>Iteration Path</strong> (default <code>Civil\OpenCivil Designer</code>) and <strong>Index Cutoff Date</strong> (default 1 January 2020) decide which work items are indexed. A narrower path or a later date makes the index smaller and faster to build.</li>
+    <li>Click <strong>Update Index</strong>. The progress bar shows the items being fetched from Azure DevOps and processed.</li>
+    <li>Keep ADO Tools open until the status shows the number of indexed items.</li>
+</ol>
+<div class="callout warning">
+    <strong>The first build takes a while</strong>
+    Every work item in scope is downloaded and analysed on your PC. With the default scope that is about 15,000 work items, so the first build can take a long time, depending on your network and PC. You only do this once: afterwards the index is updated <strong>automatically in the background at every startup</strong>, fetching only new or changed items, which is quick.
+</div>
+<p>Searching within query results works without the index. More details: <a href="#search-index">Building the Search Index</a>.</p>
+
+<h3 id="qs-features">What you can do</h3>
+<table>
+    <tr><th style="width: 30%;">Task</th><th>Where and how</th></tr>
+    <tr><td><strong>Run your ADO queries</strong></td><td><strong>Work Items</strong> tab: pick a query from Favorites or All Queries and click <strong>Read Items</strong>. Sort, filter, highlight and choose columns in the grid. <a href="#wi-queries">More</a></td></tr>
+    <tr><td><strong>Search the backlog</strong></td><td><strong>Work Items &gt; Search</strong>: describe a problem in your own words. Hybrid (default), Semantic and Keyword modes find matching work items, even when they use different wording. <a href="#search-backlog">More</a></td></tr>
+    <tr><td><strong>Find duplicates</strong></td><td>Select a row (or enter a work item ID) and click <strong>Find Similar (Cache)</strong> to list related or duplicate items. <a href="#search-find-similar">More</a></td></tr>
+    <tr><td><strong>Download attachments</strong></td><td>Select work items in the grid (or enter a work item ID) and download their attachments, one folder per work item. <a href="#wi-download-attachments">More</a></td></tr>
+    <tr><td><strong>Install a product build</strong></td><td><strong>Software Downloads</strong> tab: choose a product, select a build and click <strong>Run Update</strong> to download it, uninstall the previous version and install the new one. With <strong>Hands-Free Mode</strong> this runs without any prompts. <a href="#sd-update">More</a></td></tr>
+    <tr><td><strong>See what is in a build</strong></td><td><strong>Build Information</strong> shows the build summary, LKG package versions and the Git commits, with links to Azure DevOps. <a href="#sd-build-info">More</a></td></tr>
+    <tr><td><strong>Add your own pipelines</strong></td><td>Several products are pre-configured; <strong>Configure</strong> in Product Selection adds others, such as developer builds. <a href="#sd-products">More</a></td></tr>
+    <tr><td><strong>Compare branches or builds</strong></td><td><strong>Commit Explorer</strong> tab: list the commits between two branches or build tags with their linked work items, and export them to HTML. <a href="#commit-explorer">More</a></td></tr>
+</table>
+
+
 <h2 id="installation">Installation</h2>
 <p>Download the latest package (<code>ADO_Tools_WinUI_1.0.x.0_x64.zip</code>) from <a href="https://github.com/kivanck/ADO_Tools_WinUI/releases/latest" target="_blank">GitHub Releases</a> and extract it. The folder contains:</p>
 <table>
@@ -196,10 +255,10 @@ Add-AppxPackage -Path (Get-Item .\*.msix)</code></pre>
     <br><br>Optionally remove the old certificate afterwards: run <code>certlm.msc</code>, open <strong>Trusted People &gt; Certificates</strong> and delete <strong>CN=Kivanc.Karakas</strong>.
 </div>
 
-<h2 id="getting-started">Getting Started</h2>
+<h2 id="getting-started">Setup Details</h2>
 
 <h3 id="first-launch">First Launch</h3>
-<p>When you open ADO Tools for the first time, you need to configure your Azure DevOps connection. Navigate to the <strong>Settings</strong> tab to get started.</p>
+<p>ADO Tools asks for administrator rights (User Account Control) every time it starts, because it installs and uninstalls software. On the first start, configure the connection and folders on the <strong>Settings</strong> tab, then build the search index, as described in the <a href="#quick-start">Quick Start</a>. The sections below give the details.</p>
 
 <h3 id="connection-settings">Setting Up Your Connection</h3>
 <ol class="steps">
@@ -220,7 +279,7 @@ Add-AppxPackage -Path (Get-Item .\*.msix)</code></pre>
     A Personal Access Token is a secure way to authenticate with Azure DevOps without using your password.
 </div>
 
-<h4>How to create a PAT:</h4>
+<h4 id="create-pat">How to create a PAT:</h4>
 <ol class="steps">
     <li>Open your browser and go to <a href="https://dev.azure.com/bentleycs" target="_blank">https://dev.azure.com/bentleycs</a>.</li>
     <li>Click your <strong>profile icon</strong> (top-right corner) and select <strong>"Personal access tokens"</strong>. Or go directly to: <a href="https://dev.azure.com/bentleycs/_usersSettings/tokens" target="_blank">https://dev.azure.com/bentleycs/_usersSettings/tokens</a>.</li>
@@ -521,7 +580,7 @@ Add-AppxPackage -Path (Get-Item .\*.msix)</code></pre>
 
 
 <h3 id="search-index">Building the Search Index</h3>
-<p>Before you can use Backlog Search or Find Similar, you need to build a search index. This is a one-time setup (with incremental updates afterward).</p>
+<p>Before you can use Backlog Search or Find Similar, you need to build a search index. This is a one-time setup (with incremental updates afterward). The first build is not started automatically and can take a long time, because every work item in scope is downloaded and processed; see <a href="#qs-index">Quick Start</a>.</p>
 
 <h4>From the Settings tab (recommended for first-time setup):</h4>
 <ol class="steps">
@@ -541,7 +600,7 @@ Add-AppxPackage -Path (Get-Item .\*.msix)</code></pre>
 <p>Click the <strong>Update</strong> button on the Search sub-tab to incrementally update the index without leaving the Work Items tab.</p>
 
 <h4>Automatic updates:</h4>
-<p>By default, the index is <strong>automatically refreshed in the background at startup</strong> (incremental - only new or changed items). Search remains available while the update runs. The cache status label shows whether the index is up to date, and includes an inline refresh button for on-demand updates.</p>
+<p>By default, an existing index is <strong>automatically refreshed in the background at startup</strong> (incremental - only new or changed items). The startup refresh never builds a new index from scratch. Search remains available while the update runs. The cache status label shows whether the index is up to date, and includes an inline refresh button for on-demand updates.</p>
 
 <h4>Force Rebuild:</h4>
 <p>The <strong>Force Rebuild</strong> button on the Settings tab deletes the entire cache and re-indexes everything from scratch. This requires a <strong>two-click confirmation</strong> (the button changes to "Confirm Rebuild?" for 5 seconds - click again to confirm, or wait for it to cancel).</p>
