@@ -108,6 +108,7 @@
     <a href="#search-backlog" class="sub">Backlog Search</a>
     <a href="#search-modes" class="sub">Search Modes</a>
     <a href="#search-find-similar" class="sub">Find Similar</a>
+    <a href="#search-how" class="sub">How Search Works</a>
     <a href="#search-suggestions" class="sub">Suggestions &amp; History</a>
     <a href="#search-index" class="sub">Building the Index</a>
     <a href="#software-downloads" class="section">Software Downloads</a>
@@ -495,7 +496,7 @@ Add-AppxPackage -Path (Get-Item .\*.msix)</code></pre>
     <li>Run a query to load work items.</li>
     <li>Type your search terms in the search box (e.g., <code>crash report</code>).</li>
     <li>Press <kbd>Enter</kbd> or click the search icon to execute.</li>
-    <li>Results are ranked by relevance, with BM25 scores shown in the Title column.</li>
+    <li>Results are ranked by relevance. The top 50 are re-checked by the AI re-ranker and show a percentage; the remaining matches follow below with their keyword score (see <a href="#search-how-scores">Understanding the Scores</a>).</li>
 </ol>
 <p>Click the <strong>clear</strong> button next to the search box to return to the full query results.</p>
 
@@ -534,7 +535,7 @@ Add-AppxPackage -Path (Get-Item .\*.msix)</code></pre>
 <p>The backlog search supports three modes, selected from the dropdown on the left:</p>
 <table>
     <tr><th>Mode</th><th>How it works</th><th>Best for</th></tr>
-    <tr><td><strong>Hybrid (RRF)</strong></td><td>Runs both Semantic and Keyword searches in parallel, then combines the rankings using Reciprocal Rank Fusion. Items found by both methods get boosted.</td><td>General use - the recommended default. Combines the strengths of both methods.</td></tr>
+    <tr><td><strong>Hybrid (RRF)</strong></td><td>Runs both Semantic and Keyword searches in parallel, combines the rankings using Reciprocal Rank Fusion (items found by both methods get boosted), then re-checks the best candidates with an AI re-ranker. See <a href="#search-how">How Search Works</a>.</td><td>General use - the recommended default. Combines the strengths of both methods.</td></tr>
     <tr><td><strong>Semantic</strong></td><td>Uses AI sentence embeddings to find items with similar <em>meaning</em>, even if they use different words.</td><td>Natural language queries like "application crashes when opening large DGN files".</td></tr>
     <tr><td><strong>Keyword (BM25)</strong></td><td>Traditional keyword matching with TF-IDF weighting. Finds items containing the exact words you type.</td><td>Searching for specific terms or codes like "cant points" or "PGL elevation".</td></tr>
 </table>
@@ -563,6 +564,124 @@ Add-AppxPackage -Path (Get-Item .\*.msix)</code></pre>
     <strong>Offline Support</strong>
     Find Similar works even when you are not connected to Azure DevOps, as long as the work item exists in your local search index.
 </div>
+
+
+<h3 id="search-how">How Search Works</h3>
+<p>Backlog search is more than a simple word lookup. Every search goes through several steps, and each step catches things the others miss. Two different methods first collect candidates, their results are combined, and a second, more careful AI model then double-checks the best candidates before you see them.</p>
+
+<table>
+    <tr><th>Step</th><th>What happens</th><th>Used in mode</th></tr>
+    <tr><td><strong>1. Keyword search</strong></td><td>Finds items containing your words, giving more weight to rare words and to matches in the title.</td><td>Hybrid, Keyword</td></tr>
+    <tr><td><strong>2. Meaning search</strong></td><td>Finds items that describe the same thing, even with different words.</td><td>Hybrid, Semantic</td></tr>
+    <tr><td><strong>3. Combining</strong></td><td>Merges both result lists into one ranking.</td><td>Hybrid</td></tr>
+    <tr><td><strong>4. Re-ranking</strong></td><td>An AI model reads your query and each top candidate side by side and puts the best answers first.</td><td>All modes</td></tr>
+    <tr><td><strong>5. Recency (optional)</strong></td><td>Gently favours newer items when <strong>Prefer recent</strong> is checked.</td><td>All modes</td></tr>
+</table>
+
+<div class="callout">
+    <strong>Everything runs on your PC</strong>
+    The AI models are included in the app and run locally (on the graphics card when available, otherwise on the CPU). Your search queries and work item text are not sent to any external AI service. Azure DevOps is only contacted to fetch and update the index.
+</div>
+
+<h4 id="search-how-index">What is searched</h4>
+<p>Each work item in the index is stored as one searchable text made of:</p>
+<ul>
+    <li>The work item <strong>ID</strong> and <strong>Title</strong>.</li>
+    <li>The rich-text fields: <strong>Description</strong>, <strong>Repro Steps</strong>, <strong>System Info</strong>, <strong>Acceptance Criteria</strong>, <strong>Fix Details</strong>, <strong>Investigation Notes</strong>, <strong>Testing Notes</strong> and <strong>Notes</strong>.</li>
+    <li>The full <strong>discussion</strong> (all comments).</li>
+</ul>
+<p>Formatting (HTML, images, tables) is removed so only the text is searched. Long joined-up names used in code and settings are also split into their words, so an item mentioning <code>GeometryStationBasedOffsetReports</code> is also found when you search for <code>offset reports</code>.</p>
+
+<h4 id="search-how-keyword">Step 1 - Keyword search</h4>
+<p>Keyword search looks for the words you typed, but it does not treat all words or all matches equally:</p>
+<ul>
+    <li><strong>Rare words count more.</strong> Words that appear in almost every item (such as "Rail" or "Designer") carry little weight; specific words (such as "superelevation") carry a lot.</li>
+    <li><strong>Where the word appears matters.</strong> A match in the <strong>title</strong> counts the most, then the <strong>description / repro steps</strong>, then the rest of the text such as comments and notes. Short titles are not penalised for being short.</li>
+    <li><strong>Matching more of your words wins.</strong> An item that contains all of your search words ranks above an item that repeats just one of them many times.</li>
+    <li><strong>Words close together get a bonus.</strong> When your words appear next to each other (for example "cant points" written exactly like that), the item gets a bonus. The closer together they are, the bigger the bonus, and the bonus is larger in the title than in the body.</li>
+    <li><strong>Plurals match.</strong> "reports" also finds "report", and "boundaries" finds "boundary". Other word endings are left alone on purpose, so technical terms like "station" or "alignment" are not mangled.</li>
+    <li><strong>Common filler words</strong> ("the", "and", "when", ...) are ignored.</li>
+    <li><strong>Domain synonyms.</strong> Some interchangeable civil / software terms match each other automatically:
+        <table>
+            <tr><td>kerb / curb</td><td>sleeper / tie</td><td>chainage / stationing</td><td>superelevation / cant</td></tr>
+            <tr><td>turnout / switch</td><td>sidewalk / footpath</td><td>median / divider</td><td>crash / exception</td></tr>
+            <tr><td>hang / freeze</td><td>dialog / dialogue</td><td>carriageway / roadway</td><td>DTM / terrain</td></tr>
+            <tr><td>manhole / node</td><td>pipe / conduit</td><td></td><td></td></tr>
+        </table>
+    </li>
+    <li><strong>Quoted phrases are required.</strong> Putting words in double quotes, for example <code>crash "open dialog"</code>, only returns items that contain the exact phrase <em>open dialog</em>. The other words still help with ranking. This works in every mode.</li>
+</ul>
+
+<h4 id="search-how-semantic">Step 2 - Meaning (semantic) search</h4>
+<p>Meaning search uses a small AI language model. When the index is built, the model turns every work item into a "meaning fingerprint". When you search, your query gets a fingerprint too, and the items whose fingerprints are closest to it are returned. This is why a search for <code>application closes unexpectedly</code> can find an item titled "Crash when saving file" even though no words are shared.</p>
+<ul>
+    <li><strong>Long items are split into overlapping pieces.</strong> The model can only read a limited amount of text at once, so long items (with long descriptions or many comments) are split into pieces, each with its own fingerprint. An item is scored by its best-matching piece, so a relevant comment deep in a long discussion can still be found.</li>
+    <li><strong>Fair to short items.</strong> An item with many pieces has more chances to match by luck, so a small correction is applied to very long items. Genuinely strong matches are not affected noticeably.</li>
+    <li><strong>Civil engineering terms are explained to the model.</strong> The model is general-purpose and would read words like "cut", "fill", "daylight", "template" or "PGL" in their everyday sense. The app recognises over a hundred OpenRoads / OpenRail and civil engineering terms in your query and adds a short explanation (for example <em>PGL</em> -> profile grade line, vertical alignment, elevation), so the model understands the engineering meaning.</li>
+    <li><strong>Very weak matches are dropped</strong> instead of filling the list with unrelated items.</li>
+</ul>
+
+<h4 id="search-how-combine">Step 3 - Combining the results (Hybrid)</h4>
+<p>The two methods produce scores on completely different scales, so they cannot simply be added together. Instead, Hybrid mode looks at the <strong>position</strong> of each item in each list (this technique is called Reciprocal Rank Fusion):</p>
+<ul>
+    <li>An item near the top of <strong>both</strong> lists rises to the top of the combined list.</li>
+    <li>An item found by only <strong>one</strong> method is still included, just with less support.</li>
+    <li><strong>Top positions count much more</strong> than middle positions. A clear number-one hit from one method is not pushed down by items that were only average in both.</li>
+    <li>The keyword list is given <strong>a bit more weight</strong> (1.5x) than the meaning list, because exact technical terms are very reliable signals in this backlog.</li>
+    <li>Each method contributes a large pool of candidates (five times the <strong>Top</strong> value, at least 100), so the combination has enough material to work with.</li>
+</ul>
+
+<h4 id="search-how-rerank">Step 4 - Re-ranking (final check)</h4>
+<p>The first steps are fast enough to scan the entire backlog, but they look at your query and each item separately. The <strong>re-ranker</strong> is a second, more careful AI model that reads your query and a candidate item <em>together</em> and judges how well that item answers the query. It understands things the faster steps miss, such as negation ("does <em>not</em> update") and which words belong together.</p>
+<ul>
+    <li>Because it is slower, it only checks the <strong>best candidates</strong>: the top 50, or twice the <strong>Top</strong> value if that is larger.</li>
+    <li>It reads the <strong>title and the beginning of the text</strong> of each item (roughly the first 1,500 characters). Items with a clear title and description benefit most.</li>
+    <li>It is used in all three modes and in <a href="#search-query">Search Within Query Results</a>. The result count shows <strong>+rerank</strong> or <strong>(reranked)</strong> when it was applied.</li>
+    <li>If the re-ranker cannot be loaded, the results from the earlier steps are shown unchanged.</li>
+</ul>
+
+<h4 id="search-how-recent">Step 5 - Prefer recent (optional)</h4>
+<p>When <strong>Prefer recent</strong> is checked, older items get a gentle score reduction so that, between two similar matches, the newer one ranks higher. The reduction follows the yearly release cycle and never removes an item:</p>
+<table>
+    <tr><th>Item age</th><th>Score kept</th></tr>
+    <tr><td>New</td><td>100%</td></tr>
+    <tr><td>1 year</td><td>80%</td></tr>
+    <tr><td>2 years</td><td>70%</td></tr>
+    <tr><td>3 years</td><td>65%</td></tr>
+    <tr><td>Very old</td><td>never below 60%</td></tr>
+</table>
+<p>An old item that is an excellent match can therefore still appear above a new item that is only a weak match.</p>
+
+<h4 id="search-how-similar">How Find Similar works</h4>
+<p><a href="#search-find-similar">Find Similar</a> uses the same steps, with the selected work item acting as the "query":</p>
+<ul>
+    <li><strong>Meaning:</strong> the item's stored fingerprint is compared with all other items in the index.</li>
+    <li><strong>Keywords:</strong> using a whole work item as a keyword query would not work well, so the app picks the ~15 most <em>distinctive</em> words of the item (words that appear often in it but are rare in the backlog) and searches with those. Words that appear in more than half of all items are skipped.</li>
+    <li><strong>Combining and re-ranking:</strong> both lists are combined as in Hybrid mode, then the re-ranker compares the item's <strong>title and the start of its description</strong> with each candidate.</li>
+    <li><strong>Same area bonus:</strong> duplicates usually belong to the same module, so candidates in the <strong>same Area Path</strong> as the source item get a small (10%) boost.</li>
+    <li>The source item itself is never listed as a result, and <strong>Exclude Done</strong> is respected.</li>
+</ul>
+
+<h4 id="search-how-scores">Understanding the scores</h4>
+<p>The value in square brackets at the start of each result's title shows how strong the match is:</p>
+<table>
+    <tr><th>Display</th><th>Meaning</th></tr>
+    <tr><td><strong>[82%]</strong> after re-ranking</td><td>How confident the re-ranker is that the item matches your query. This is the most meaningful score.</td></tr>
+    <tr><td><strong>[82%]</strong> in Hybrid without re-ranking</td><td>How close the item came to being ranked first by <em>both</em> methods (100% = first in both).</td></tr>
+    <tr><td><strong>[82%]</strong> in Semantic without re-ranking</td><td>How close the item's meaning is to your query.</td></tr>
+    <tr><td><strong>[12.4]</strong> (plain number)</td><td>Keyword score. Higher is better, but there is no fixed maximum, so it is only useful for comparing results of the same search.</td></tr>
+</table>
+<p>Scores are best used to compare results within one search, not as an absolute measure of correctness. With <strong>Prefer recent</strong> or the Find Similar same-area bonus applied, the shown score includes those adjustments.</p>
+
+<h4 id="search-how-tips">Tips for better results</h4>
+<ul>
+    <li>Start with <strong>Hybrid</strong>. Switch to <strong>Keyword</strong> for exact codes, error messages or setting names, and to <strong>Semantic</strong> when you only know roughly what the problem looks like.</li>
+    <li>Write the query like a short bug title ("corridor not updating after template change") rather than a single word. The re-ranker works best with a clear description.</li>
+    <li>Use the specific technical term when you know it - rare words are strong signals.</li>
+    <li>Use <strong>double quotes</strong> to require an exact phrase.</li>
+    <li>When connected, typing just a <strong>work item number</strong> opens that item directly instead of searching.</li>
+    <li>Keep the index current with <strong>Update</strong> - new items are only searchable after they are indexed.</li>
+</ul>
 
 
 <h3 id="search-suggestions">Suggestions and History</h3>
